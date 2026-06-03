@@ -1,0 +1,13 @@
+.dart_tool/
+.packages
+pubspec.lock
+build/
+coverage/
+
+node_modules/
+.next/
+out/
+dist/
+
+.DS_Store
+*.log

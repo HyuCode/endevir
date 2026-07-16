@@ -10,5 +10,12 @@
     // 先頭行がH1でなくてもよい（frontmatter対応）
     "MD041": false
   },
-  "ignores": ["node_modules/**"]
+  "ignores": [
+    "node_modules/**",
+    "**/.symlinks/**",
+    "**/.dart_tool/**",
+    "**/build/**",
+    "**/Pods/**",
+    "**/ephemeral/**"
+  ]
 }

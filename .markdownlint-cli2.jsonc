@@ -1,0 +1,14 @@
+{
+  "config": {
+    "default": true,
+    // 行長制限は日本語長文レポートに不向きなので無効化
+    "MD013": false,
+    // 同名見出しの重複を許可（レポート内の「まとめ」等）
+    "MD024": { "siblings_only": true },
+    // インラインHTMLを許可（バッジ、テーブル調整用）
+    "MD033": false,
+    // 先頭行がH1でなくてもよい（frontmatter対応）
+    "MD041": false
+  },
+  "ignores": ["node_modules/**"]
+}

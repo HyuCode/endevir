@@ -43,8 +43,8 @@ Future<void> _handleRequest(HttpRequest request) async {
     final Object? result = switch (path) {
       '/ping' => {'pong': true},
       '/keys' => _collectKeys(),
-      '/tap' => await _tapByKey(request.uri.queryParameters['key']!),
-      '/text' => {'exists': _textExists(request.uri.queryParameters['value']!)},
+      '/tap' => await tapByKey(request.uri.queryParameters['key']!),
+      '/text' => {'exists': textExists(request.uri.queryParameters['value']!)},
       _ => null,
     };
 
@@ -90,7 +90,7 @@ List<String> _collectKeys() {
   return keys;
 }
 
-bool _textExists(String value) {
+bool textExists(String value) {
   var exists = false;
   void visit(Element element) {
     if (exists) return;
@@ -106,9 +106,17 @@ bool _textExists(String value) {
   return exists;
 }
 
+/// キーで特定した要素のグローバル中心座標を返す（未検出・未添付ならnull）。
+Offset? globalCenterOf(String keyValue) {
+  final element = _findByKeyString(keyValue);
+  final renderObject = element?.renderObject;
+  if (renderObject is! RenderBox || !renderObject.attached) return null;
+  return renderObject.localToGlobal(renderObject.size.center(Offset.zero));
+}
+
 /// 論理座標でポインタイベントを合成してタップする。
 /// WidgetTesterに依存しない、本番モードで動くタップの原型。
-Future<Map<String, Object>> _tapByKey(String keyValue) async {
+Future<Map<String, Object>> tapByKey(String keyValue) async {
   final element = _findByKeyString(keyValue);
   if (element == null) {
     return {'ok': false, 'reason': 'not found: $keyValue'};

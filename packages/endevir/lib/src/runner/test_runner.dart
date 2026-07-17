@@ -20,11 +20,16 @@ class EndevirTestRunner {
   EndevirTestRunner({
     required TraceWriter writer,
     required EndevirTester Function(int testId) testerFactory,
+    Future<void> Function()? beforeEach,
   })  : _writer = writer,
-        _testerFactory = testerFactory;
+        _testerFactory = testerFactory,
+        _beforeEach = beforeEach;
 
   final TraceWriter _writer;
   final EndevirTester Function(int testId) _testerFactory;
+
+  /// 各テストの直前に呼ばれるフック（画面状態のリセット等）。
+  final Future<void> Function()? _beforeEach;
 
   /// [registry]の全テスト（[only]指定時は名前一致のみ）を実行する。
   Future<RunSummary> run(
@@ -42,6 +47,7 @@ class EndevirTestRunner {
         .toList();
 
     for (final entry in targets) {
+      await _beforeEach?.call();
       final testId = _writer.testStart(entry.name);
       try {
         await entry.body(_testerFactory(testId));

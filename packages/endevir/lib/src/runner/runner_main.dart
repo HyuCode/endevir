@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../agent/endevir_agent.dart';
+import '../interaction/navigation.dart';
 import '../tester/endevir_tester.dart';
 import 'test_registry.dart';
 import 'test_runner.dart';
@@ -39,6 +40,8 @@ Future<void> endevirRunnerMain({
         writer: writer,
         testerFactory: (testId) =>
             EndevirTester(writer: writer, testId: testId),
+        // テスト間の簡易状態リセット（強い分離はネイティブ写像側で行う）
+        beforeEach: () async => popToRoot(),
       );
       return runner.run(
         endevirRegistry,

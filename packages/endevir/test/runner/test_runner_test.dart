@@ -128,6 +128,22 @@ void main() {
       expect(testEnd.status, TraceStatus.FAILED);
     });
 
+    test('beforeEachフックが各テストの前に呼ばれる（状態リセット用）', () async {
+      final calls = <String>[];
+      registry.add('t1', (e) async => calls.add('t1'));
+      registry.add('t2', (e) async => calls.add('t2'));
+
+      final withHook = EndevirTestRunner(
+        writer: writer,
+        testerFactory: (testId) =>
+            EndevirTester(writer: writer, testId: testId),
+        beforeEach: () async => calls.add('reset'),
+      );
+      await withHook.run(registry, runId: 'r', platform: 'android');
+
+      expect(calls, ['reset', 't1', 'reset', 't2']);
+    });
+
     test('対象名フィルタを指定すると一致するテストのみ実行される（ネイティブ写像用）',
         () async {
       var ran = <String>[];

@@ -98,6 +98,58 @@ class EndevirElement {
   Future<WaitResult> waitUntilVisible({Duration? timeout}) =>
       _tester.expectVisible(_finder, timeout: timeout);
 
+  /// このスコープの配下から検索するハンドルを返す（チェーン、CORE-002）。
+  // ignore: non_constant_identifier_names
+  EndevirElement $(Object target) => EndevirElement(
+        EndevirFinder.descendant(
+          of: _finder,
+          matching: EndevirFinder.from(target),
+        ),
+        _tester,
+      );
+
+  /// 対象（またはその配下のEditableText）へテキストを入力する。
+  ///
+  /// フォーカスを与えてIME経由相当の編集値更新を行う。本番モードで動作する
+  /// （WidgetTester非依存）。
+  Future<void> enterText(String text, {Duration? timeout}) async {
+    final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
+    await _tester._waiter.waitUntil(
+      () => tracker.update(_currentCenter()),
+      timeout: timeout ?? _tester.defaultTimeout,
+      describe: 'enterText(stable): ${_finder.describe()}',
+      keepFramesFlowing: true,
+    );
+
+    final elements = _finder.resolve(_tester._rootResolver());
+    final editable = _findEditableText(elements.first);
+    if (editable == null) {
+      throw StateError(
+          'EditableTextが見つかりません: ${_finder.describe()}');
+    }
+    editable.widget.focusNode.requestFocus();
+    editable.updateEditingValue(TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    ));
+  }
+
+  /// 要素自身または配下からEditableTextStateを探す。
+  EditableTextState? _findEditableText(Element element) {
+    EditableTextState? found;
+    void visit(Element el) {
+      if (found != null) return;
+      if (el is StatefulElement && el.state is EditableTextState) {
+        found = el.state as EditableTextState;
+        return;
+      }
+      el.visitChildren(visit);
+    }
+
+    visit(element);
+    return found;
+  }
+
   Offset? _currentCenter() {
     final elements = _finder.resolve(_tester._rootResolver());
     if (elements.isEmpty) return null;

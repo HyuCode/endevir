@@ -12,6 +12,7 @@ abstract class EndevirFinder {
   /// - [Symbol]（`#emailField`記法）: `ValueKey<String>` として解決
   /// - [Key]: ウィジェットキー
   /// - [String]: Textウィジェットの部分一致
+  /// - [RegExp]: Textウィジェットの正規表現一致
   /// - [Type]: ウィジェット型
   /// - [EndevirFinder]: そのまま返す
   factory EndevirFinder.from(Object target) {
@@ -20,14 +21,25 @@ abstract class EndevirFinder {
       final Symbol symbol => KeyFinder(ValueKey<String>(_symbolName(symbol))),
       final Key key => KeyFinder(key),
       final String text => TextFinder(text),
+      final RegExp pattern => TextRegExpFinder(pattern),
       final Type type => TypeFinder(type),
       _ => throw ArgumentError.value(
           target,
           'target',
-          'Symbol / Key / String / Type / EndevirFinder のいずれかを指定してください',
+          'Symbol / Key / String / RegExp / Type / EndevirFinder のいずれかを指定してください',
         ),
     };
   }
+
+  /// Semanticsウィジェットのラベルで特定するファインダー。
+  factory EndevirFinder.semanticsLabel(String label) =
+      SemanticsLabelFinder;
+
+  /// [of]の配下から[matching]を検索するスコープつきファインダー（チェーン）。
+  factory EndevirFinder.descendant({
+    required EndevirFinder of,
+    required EndevirFinder matching,
+  }) = DescendantFinder;
 
   /// [root]以下を検索してマッチする要素を返す。
   List<Element> resolve(Element root) {
@@ -81,6 +93,64 @@ class TextFinder extends EndevirFinder {
 
   @override
   String describe() => 'text: "$text"';
+}
+
+/// Textウィジェットの正規表現一致ファインダー。
+class TextRegExpFinder extends EndevirFinder {
+  const TextRegExpFinder(this.pattern);
+
+  final RegExp pattern;
+
+  @override
+  bool matches(Element element) {
+    final widget = element.widget;
+    return widget is Text && pattern.hasMatch(widget.data ?? '');
+  }
+
+  @override
+  String describe() => 'text: /${pattern.pattern}/';
+}
+
+/// Semanticsウィジェットのラベルによるファインダー。
+class SemanticsLabelFinder extends EndevirFinder {
+  const SemanticsLabelFinder(this.label);
+
+  final String label;
+
+  @override
+  bool matches(Element element) {
+    final widget = element.widget;
+    return widget is Semantics && widget.properties.label == label;
+  }
+
+  @override
+  String describe() => 'semanticsLabel: "$label"';
+}
+
+/// スコープつきファインダー（親の配下だけを検索する）。
+class DescendantFinder extends EndevirFinder {
+  const DescendantFinder({required this.of, required this.matching});
+
+  final EndevirFinder of;
+  final EndevirFinder matching;
+
+  @override
+  List<Element> resolve(Element root) {
+    final results = <Element>[];
+    for (final parent in of.resolve(root)) {
+      // 親自身は含めず、その配下のみ検索する
+      parent.visitChildren((child) {
+        results.addAll(matching.resolve(child));
+      });
+    }
+    return results;
+  }
+
+  @override
+  bool matches(Element element) => matching.matches(element);
+
+  @override
+  String describe() => '${matching.describe()} in ${of.describe()}';
 }
 
 /// ウィジェット型によるファインダー。

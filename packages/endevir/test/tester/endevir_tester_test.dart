@@ -69,6 +69,37 @@ void main() {
     expect(find.text('カウント: 1'), findsOneWidget);
   });
 
+  testWidgets(r'$(...).enterText()はTextFieldに入力できる（本番モード原型）', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: _FormScreen()));
+    final e = makeTester(tester);
+
+    var done = false;
+    e.$(#email).enterText('user@example.com').then((_) => done = true);
+    for (var i = 0; i < 5 && !done; i++) {
+      signal.tick();
+      await tester.pump();
+    }
+
+    expect(done, isTrue);
+    expect(find.text('user@example.com'), findsOneWidget);
+  });
+
+  testWidgets(r'$記法のチェーンでスコープを絞って操作できる', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: _FormScreen()));
+    final e = makeTester(tester);
+
+    // フォームセクション配下のTextFieldに絞って入力
+    var done = false;
+    e.$(#form_section).$(TextField).enterText('scoped').then((_) => done = true);
+    for (var i = 0; i < 5 && !done; i++) {
+      signal.tick();
+      await tester.pump();
+    }
+
+    expect(done, isTrue);
+    expect(find.text('scoped'), findsOneWidget);
+  });
+
   testWidgets('存在しない要素へのtapはWaitTimeoutExceptionで失敗する', (tester) async {
     await tester.pumpWidget(counterApp());
     final e = makeTester(tester);
@@ -85,6 +116,22 @@ void main() {
     expect(error, isA<WaitTimeoutException>());
     expect('$error', contains('missing'));
   });
+}
+
+class _FormScreen extends StatelessWidget {
+  const _FormScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        key: const ValueKey('form_section'),
+        children: const [
+          TextField(key: ValueKey('email')),
+        ],
+      ),
+    );
+  }
 }
 
 class _CounterScreen extends StatefulWidget {

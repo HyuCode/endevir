@@ -80,9 +80,9 @@ Future<int> runTestCommand(List<String> args) async {
 
   try {
     print('[endevir] connect to agent');
-    final socket = await _connectWithRetry(launcher.agentHost);
+    final socket = await connectToAgent(host: launcher.agentHost);
 
-    final exitCode = await _runAndCollect(
+    final exitCode = await runAndCollect(
       socket,
       outDir: outDir,
       only: options['only'] as String?,
@@ -95,7 +95,8 @@ Future<int> runTestCommand(List<String> args) async {
   }
 }
 
-Future<WebSocket> _connectWithRetry(String host) async {
+/// エージェントへの接続（リトライつき）。develop/testコマンドから共用する。
+Future<WebSocket> connectToAgent({String host = 'localhost'}) async {
   for (var attempt = 0; attempt < 60; attempt++) {
     try {
       return await WebSocket.connect('ws://$host:$_agentPort/ws');
@@ -106,7 +107,7 @@ Future<WebSocket> _connectWithRetry(String host) async {
   throw StateError('agent not reachable on $host:$_agentPort');
 }
 
-Future<int> _runAndCollect(
+Future<int> runAndCollect(
   WebSocket socket, {
   required Directory outDir,
   String? only,

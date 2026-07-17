@@ -5,3 +5,4 @@ pnpm-lock.yaml
 **/build/
 **/Pods/
 **/ephemeral/
+**/androidTest/assets/endevir_manifest.json

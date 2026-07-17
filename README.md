@@ -50,13 +50,13 @@ $ dart run endevir_cli:endevir_cli test -p ios -d <simulator-udid>
 
 必要: [fvm](https://fvm.app)（Flutterは `.fvmrc` で固定）、[pnpm](https://pnpm.io)
 
-```console
-$ fvm dart pub get          # ワークスペース解決
-$ fvm flutter analyze packages examples
-$ (cd packages/endevir && fvm flutter test)
-$ (cd packages/endevir_reporter && fvm dart test)
-$ pnpm install && pnpm lint:md && pnpm format:check
-$ pnpm codegen              # スキーマから型を再生成
+```sh
+fvm dart pub get          # ワークスペース解決
+fvm flutter analyze packages examples
+(cd packages/endevir && fvm flutter test)
+(cd packages/endevir_reporter && fvm dart test)
+pnpm install && pnpm lint:md && pnpm format:check
+pnpm codegen              # スキーマから型を再生成
 ```
 
 原則TDD（[要件定義 §11.1](docs/02-spec/01-overview.md)）。技術決定は[ADR](docs/04-adr/README.md)に記録する。

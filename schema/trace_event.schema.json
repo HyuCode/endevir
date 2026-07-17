@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TraceEvent",
+  "description": "Endevir trace（JSONL）の1行。全イベントが単調増加のseqとtimestampUsを持ち、ステップ相関（RPT-002）はstepId/testIdで行う。スキーマはv1（フラット構造+type判別）。言語中立の単一の真実であり、Dart/TypeScriptの型はここから生成する（RPT-006, ADR-004）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "seq", "timestampUs"],
+  "properties": {
+    "type": {
+      "description": "イベント種別",
+      "type": "string",
+      "enum": ["runStart", "testStart", "stepStart", "stepEnd", "log", "testEnd", "runEnd"],
+      "title": "TraceEventType"
+    },
+    "seq": {
+      "description": "trace内で単調増加する連番（相関と順序の基準）",
+      "type": "integer"
+    },
+    "timestampUs": {
+      "description": "Unixエポックからのマイクロ秒（全ログ・イベント共通の時刻軸）",
+      "type": "integer"
+    },
+    "schemaVersion": {
+      "description": "traceスキーマのバージョン（runStartに必須）",
+      "type": "string"
+    },
+    "runId": {
+      "description": "実行の一意ID（runStartに必須）",
+      "type": "string"
+    },
+    "platform": {
+      "description": "実行プラットフォーム（例: android, ios。runStartで記録）",
+      "type": "string"
+    },
+    "testId": {
+      "description": "テストの連番ID（testStart/testEnd、および所属イベントの相関キー）",
+      "type": "integer"
+    },
+    "stepId": {
+      "description": "ステップの連番ID（stepStart/stepEnd、およびlogの相関キー）",
+      "type": "integer"
+    },
+    "name": {
+      "description": "テスト名またはステップ名（testStart/stepStartで記録）",
+      "type": "string"
+    },
+    "status": {
+      "description": "終了ステータス（stepEnd/testEnd）",
+      "type": "string",
+      "enum": ["passed", "failed", "skipped"],
+      "title": "TraceStatus"
+    },
+    "error": {
+      "description": "失敗時のエラー詳細（stepEnd/testEnd）",
+      "type": "string"
+    },
+    "screenshot": {
+      "description": "スクリーンショットの相対パス（stepEnd。証跡モードで記録）",
+      "type": "string"
+    },
+    "source": {
+      "description": "ログの発生源（log）",
+      "type": "string",
+      "enum": ["dart", "native", "network", "runner"],
+      "title": "LogSource"
+    },
+    "message": {
+      "description": "ログ本文（log）",
+      "type": "string"
+    },
+    "durationUs": {
+      "description": "所要時間マイクロ秒（stepEnd/testEnd）",
+      "type": "integer"
+    }
+  }
+}

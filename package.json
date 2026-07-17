@@ -7,10 +7,12 @@
     "format": "prettier --write \"**/*.{md,json,yaml,yml}\"",
     "format:check": "prettier --check \"**/*.{md,json,yaml,yml}\"",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
-    "lint:md:fix": "markdownlint-cli2 --fix \"**/*.md\""
+    "lint:md:fix": "markdownlint-cli2 --fix \"**/*.md\"",
+    "codegen": "./scripts/codegen.sh"
   },
   "devDependencies": {
     "markdownlint-cli2": "^0.23.0",
-    "prettier": "^3.9.5"
+    "prettier": "^3.9.5",
+    "quicktype": "^25.0.0"
   }
 }

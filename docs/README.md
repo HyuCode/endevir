@@ -9,3 +9,5 @@
 - [04-adr/](./04-adr/README.md) — アーキテクチャ決定記録（M0スパイクの結論を記録）
 - [05-design/](./05-design/01-trace-schema.md) — 設計文書
   - [01-trace-schema.md](./05-design/01-trace-schema.md) — traceスキーマ v1
+- [06-benchmarks/](./06-benchmarks/01-mvp-benchmarks.md) — 公開KPIの計測記録
+  - [01-mvp-benchmarks.md](./06-benchmarks/01-mvp-benchmarks.md) — MVPベンチマーク

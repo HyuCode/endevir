@@ -30,6 +30,6 @@ elapsed=$(( $(date +%s) - start ))
 echo ""
 echo "SOAK RESULT: $pass/$ITERATIONS passed, $fail failed (${elapsed}s total)"
 if [ "$ITERATIONS" -gt 0 ]; then
-  echo "SOAK FLAKE RATE: $(awk "BEGIN {printf \"%.1f\", $fail * 100 / $ITERATIONS}")%"
+  awk -v f="$fail" -v n="$ITERATIONS" 'BEGIN {printf "SOAK FLAKE RATE: %.1f%%\n", f * 100 / n}'
 fi
 [ "$fail" -eq 0 ]

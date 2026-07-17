@@ -1,0 +1,115 @@
+import 'package:endevir/src/tester/endevir_tester.dart';
+import 'package:endevir/src/wait/wait_exception.dart';
+import 'package:endevir_reporter/endevir_reporter.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../wait/frame_waiter_test.dart' show ManualFrameSignal;
+
+void main() {
+  late List<String> lines;
+  late TraceWriter writer;
+  late ManualFrameSignal signal;
+
+  setUp(() {
+    lines = [];
+    writer = TraceWriter(lines.add, nowUs: () => 0);
+    signal = ManualFrameSignal();
+  });
+
+  EndevirTester makeTester(WidgetTester tester) => EndevirTester(
+        writer: writer,
+        testId: 1,
+        frameSignal: signal,
+        rootResolver: () => tester.binding.rootElement!,
+      );
+
+  Widget counterApp() => const MaterialApp(home: _CounterScreen());
+
+  testWidgets('expectVisibleは対象が既に表示されていれば即完了する', (tester) async {
+    await tester.pumpWidget(counterApp());
+    final e = makeTester(tester);
+
+    final result = await e.expectVisible('カウント: 0');
+
+    expect(result.evaluations, 1);
+  });
+
+  testWidgets('expectVisibleは後から現れる要素をフレーム再評価で検知する', (tester) async {
+    await tester.pumpWidget(counterApp());
+    final e = makeTester(tester);
+
+    var done = false;
+    e.expectVisible('カウント: 1').then((_) => done = true);
+    await tester.pump();
+    expect(done, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('increment')));
+    await tester.pump();
+    signal.tick();
+    await tester.pump();
+
+    expect(done, isTrue);
+  });
+
+  testWidgets(r'$(...).tap()は位置安定を待ってからタップする', (tester) async {
+    await tester.pumpWidget(counterApp());
+    final e = makeTester(tester);
+
+    var tapped = false;
+    e.$(#increment).tap().then((_) => tapped = true);
+
+    // 3フレーム安定するまではタップされない
+    for (var i = 0; i < 4; i++) {
+      signal.tick();
+      await tester.pump();
+    }
+    expect(tapped, isTrue);
+    await tester.pump();
+    expect(find.text('カウント: 1'), findsOneWidget);
+  });
+
+  testWidgets('存在しない要素へのtapはWaitTimeoutExceptionで失敗する', (tester) async {
+    await tester.pumpWidget(counterApp());
+    final e = makeTester(tester);
+
+    Object? error;
+    // ignore: avoid_types_on_closure_parameters
+    e.$(#missing).tap(timeout: const Duration(milliseconds: 50)).catchError(
+      (Object err) {
+        error = err;
+      },
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(error, isA<WaitTimeoutException>());
+    expect('$error', contains('missing'));
+  });
+}
+
+class _CounterScreen extends StatefulWidget {
+  const _CounterScreen();
+
+  @override
+  State<_CounterScreen> createState() => _CounterScreenState();
+}
+
+class _CounterScreenState extends State<_CounterScreen> {
+  int _count = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          Text('カウント: $_count'),
+          ElevatedButton(
+            key: const ValueKey('increment'),
+            onPressed: () => setState(() => _count++),
+            child: const Text('+1'),
+          ),
+        ],
+      ),
+    );
+  }
+}

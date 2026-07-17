@@ -1,0 +1,12 @@
+name: _endevir_workspace
+description: Endevir monorepo workspace root (not published)
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+workspace:
+  - packages/endevir
+  - packages/endevir_reporter
+  - packages/endevir_cli
+  - examples/flutter_app

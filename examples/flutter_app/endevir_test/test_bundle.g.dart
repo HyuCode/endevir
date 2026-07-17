@@ -6,9 +6,9 @@ import 'login_test.dart' as login_test;
 
 /// 静的に列挙されたテスト名 → 実行クロージャ
 final Map<String, Future<void> Function()> testEntries = {
-  'ホーム画面が表示される': () async { endevirTargetTest = 'ホーム画面が表示される'; home_test.main(); },
-  'カウントアップできる': () async { endevirTargetTest = 'カウントアップできる'; home_test.main(); },
-  'ログイン > 正しい認証情報でログインできる': () async { endevirTargetTest = '正しい認証情報でログインできる'; login_test.main(); },
-  'ログイン > 誤ったパスワードでエラーが表示される': () async { endevirTargetTest = '誤ったパスワードでエラーが表示される'; login_test.main(); },
-  '未ログインでもホームを閲覧できる': () async { endevirTargetTest = '未ログインでもホームを閲覧できる'; login_test.main(); },
+  'ホーム画面が表示される': () => runBundleEntry('ホーム画面が表示される', home_test.main),
+  'カウントアップできる': () => runBundleEntry('カウントアップできる', home_test.main),
+  'ログイン > 正しい認証情報でログインできる': () => runBundleEntry('正しい認証情報でログインできる', login_test.main),
+  'ログイン > 誤ったパスワードでエラーが表示される': () => runBundleEntry('誤ったパスワードでエラーが表示される', login_test.main),
+  '未ログインでもホームを閲覧できる': () => runBundleEntry('未ログインでもホームを閲覧できる', login_test.main),
 };

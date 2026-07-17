@@ -17,3 +17,4 @@
 | [ADR-003](./03-hot-restart-loop.md)        | 開発イテレーションはVMサービス経由のホットリスタートで再実行する            | Accepted   | CLI-102 / S5      |
 | [ADR-004](./04-trace-recording-cost.md)    | 証跡のスクリーンショットはGPUスナップショットのみ同期、エンコードは遅延する | Accepted   | RPT-001〜006 / S4 |
 | [ADR-005](./05-static-test-enumeration.md) | テスト列挙は構文解析による静的抽出で行い、ドライランを廃する                | Accepted   | CORE-110 / S2     |
+| [ADR-006](./06-native-test-mapping.md)     | Android写像はマニフェスト駆動のParameterized JUnit + エージェント実行で行う | Accepted   | CORE-109 / S6     |

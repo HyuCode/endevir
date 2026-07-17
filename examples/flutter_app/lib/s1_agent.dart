@@ -25,6 +25,37 @@ Future<HttpServer> startAgent({int port = 8808}) async {
 
 int _pointerId = 0;
 
+/// S6: ネイティブ写像から実行するテストエントリ（バンドル生成物を登録する）。
+Map<String, Future<void> Function()> _testEntries = {};
+
+void registerTestEntries(Map<String, Future<void> Function()> entries) {
+  _testEntries = entries;
+}
+
+/// テストを1件実行して結果を返す（ネイティブテストケースからの呼び出し用）。
+Future<Map<String, Object?>> _runTest(String fullName) async {
+  final entry = _testEntries[fullName];
+  if (entry == null) {
+    return {'status': 'notFound', 'name': fullName};
+  }
+  final stopwatch = Stopwatch()..start();
+  try {
+    await entry();
+    return {
+      'status': 'passed',
+      'name': fullName,
+      'durationMs': stopwatch.elapsedMilliseconds,
+    };
+  } catch (e) {
+    return {
+      'status': 'failed',
+      'name': fullName,
+      'error': '$e',
+      'durationMs': stopwatch.elapsedMilliseconds,
+    };
+  }
+}
+
 Future<void> _handleRequest(HttpRequest request) async {
   try {
     final path = request.uri.path;
@@ -45,6 +76,7 @@ Future<void> _handleRequest(HttpRequest request) async {
       '/keys' => _collectKeys(),
       '/tap' => await tapByKey(request.uri.queryParameters['key']!),
       '/text' => {'exists': textExists(request.uri.queryParameters['value']!)},
+      '/runTest' => await _runTest(request.uri.queryParameters['name']!),
       _ => null,
     };
 
@@ -104,6 +136,22 @@ bool textExists(String value) {
 
   WidgetsBinding.instance.rootElement?.visitChildren(visit);
   return exists;
+}
+
+/// Navigatorをルートまで戻す（テスト間の簡易状態リセット。本物はアプリ再起動等）。
+void popToRoot() {
+  NavigatorState? navigator;
+  void visit(Element element) {
+    if (navigator != null) return;
+    if (element is StatefulElement && element.state is NavigatorState) {
+      navigator = element.state as NavigatorState;
+      return;
+    }
+    element.visitChildren(visit);
+  }
+
+  WidgetsBinding.instance.rootElement?.visitChildren(visit);
+  navigator?.popUntil((route) => route.isFirst);
 }
 
 /// キーで特定した要素のグローバル中心座標を返す（未検出・未添付ならnull）。

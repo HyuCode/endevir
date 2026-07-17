@@ -53,6 +53,19 @@ void main(List<String> args) {
     File('$dirPath/test_bundle.g.dart').writeAsStringSync(bundle);
     print('S2-BUNDLE generated: $dirPath/test_bundle.g.dart');
   }
+
+  final manifestOutIndex = args.indexOf('--manifest-out');
+  if (manifestOutIndex >= 0 && manifestOutIndex + 1 < args.length) {
+    final outPath = args[manifestOutIndex + 1];
+    final manifest = entries
+        .where((e) => !e.isDynamic)
+        .map((e) => {'fullName': e.fullName, 'file': e.file})
+        .toList();
+    File(outPath)
+      ..createSync(recursive: true)
+      ..writeAsStringSync(jsonEncode(manifest));
+    print('S2-MANIFEST generated: $outPath');
+  }
 }
 
 class TestEntry {
@@ -207,12 +220,10 @@ String _generateBundle(
     ..writeln('final Map<String, Future<void> Function()> testEntries = {');
   for (final entry in entries.where((e) => !e.isDynamic)) {
     final alias = aliases[entry.file];
-    // 注: mainはvoid（登録のみ）。本物のendevirTestは「登録」であり、
-    // 実行はランナーが担う（flutter_testと同じ構造）。ADR-005参照
+    // 注: mainはvoid（登録のみ）。実行はrunBundleEntryが担う（ADR-005）
     buffer.writeln(
-      "  '${entry.fullName.replaceAll("'", r"\'")}': () async {"
-      " endevirTargetTest = '${entry.name!.replaceAll("'", r"\'")}';"
-      ' $alias.main(); },',
+      "  '${entry.fullName.replaceAll("'", r"\'")}': () =>"
+      " runBundleEntry('${entry.name!.replaceAll("'", r"\'")}', $alias.main),",
     );
   }
   buffer.writeln('};');

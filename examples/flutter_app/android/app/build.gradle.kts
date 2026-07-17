@@ -28,6 +28,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // S6スパイク: ネイティブテスト写像（instrumentation）用ランナー
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -41,4 +43,12 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // S6スパイク: instrumentationテスト（ネイティブ写像）用。
+    // バージョンはFlutterのdebug embeddingが持ち込むandroidx.test:runner 1.2.0に
+    // 合わせる（AGPのconsistent resolutionとの衝突回避）
+    androidTestImplementation("androidx.test.ext:junit:1.1.1")
+    androidTestImplementation("androidx.test:runner:1.2.0")
 }

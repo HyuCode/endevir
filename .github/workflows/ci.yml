@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.1" # .fvmrc と同期させること
+          channel: stable
+          cache: true
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Analyze
+        run: flutter analyze packages examples
+      - name: Test endevir
+        run: flutter test
+        working-directory: packages/endevir
+      - name: Test endevir_reporter
+        run: dart test
+        working-directory: packages/endevir_reporter
+      - name: Test example app (widget tests)
+        run: flutter test
+        working-directory: examples/flutter_app
+
+  docs-and-codegen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Markdown lint
+        run: pnpm lint:md
+      - name: Format check
+        run: pnpm format:check
+      - name: Codegen up-to-date check
+        run: |
+          pnpm codegen
+          git diff --exit-code -- packages/endevir_reporter/lib/src/generated schema/generated

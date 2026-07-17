@@ -84,13 +84,15 @@ Future<int> _runAndCollect(
   final traceFile = File('${outDir.path}/trace.jsonl');
   final sink = traceFile.openWrite();
 
+  final events = <TraceEvent>[];
   final completer = Completer<RpcResponse>();
   socket.listen((data) {
     final message = RpcMessage.decode(data as String);
     if (message is RpcNotification && message.method == 'traceEvent') {
       final line = message.params['line'] as String;
       sink.writeln(line);
-      _printProgress(line);
+      events.add(traceEventFromJson(line));
+      _printProgress(events.last);
     } else if (message is RpcResponse) {
       completer.complete(message);
     }
@@ -111,17 +113,20 @@ Future<int> _runAndCollect(
     stderr.writeln('[endevir] run failed: ${response.error}');
     return 1;
   }
+  final reportFile = File('${outDir.path}/report.html');
+  reportFile.writeAsStringSync(buildHtmlReport(TraceModel.fromEvents(events)));
+
   final result = response.result!;
   final failed = result['failed'] as int;
   print('');
   print('[endevir] ${result['total']} tests: '
       '${result['passed']} passed, $failed failed');
-  print('[endevir] trace: ${traceFile.path}');
+  print('[endevir] trace:  ${traceFile.path}');
+  print('[endevir] report: ${reportFile.path}');
   return failed > 0 ? 1 : 0;
 }
 
-void _printProgress(String line) {
-  final event = traceEventFromJson(line);
+void _printProgress(TraceEvent event) {
   switch (event.type) {
     case TraceEventType.TEST_START:
       stdout.write('  ${event.name} ... ');

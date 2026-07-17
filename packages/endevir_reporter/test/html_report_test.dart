@@ -40,6 +40,15 @@ void main() {
       expect(html, contains('TimeoutException: boom'));
     });
 
+    test('ステップは横並びのストーリーボード（カード列）として描画される', () {
+      final html = buildHtmlReport(model());
+
+      // 横スクロールのストリップコンテナ+ステップカード
+      expect(html, contains('class="steps-strip"'));
+      expect(html, contains('class="step-card'));
+      expect(html, contains('overflow-x: auto'));
+    });
+
     test('スクリーンショットはdata URIとして埋め込まれる（自己完結、RPT-201）', () {
       final lines = <String>[];
       var timeUs = 0;

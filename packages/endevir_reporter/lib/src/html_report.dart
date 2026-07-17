@@ -48,17 +48,19 @@ String buildHtmlReport(
       buffer.writeln('<pre class="error">${_escape(test.error!)}</pre>');
     }
     if (test.steps.isNotEmpty) {
-      buffer.writeln('<ol class="steps">');
-      for (final step in test.steps) {
+      // 手順は横並びのストーリーボード形式（モバイルの縦長スクリーンショットは
+      // 横に並べた方がフローとして追いやすい）
+      buffer.writeln('<div class="steps-strip">');
+      for (final (index, step) in test.steps.indexed) {
         final stepStatus = _statusName(step.status);
         buffer
-          ..writeln('<li class="step $stepStatus">')
-          ..writeln('<span class="status $stepStatus">$stepStatus</span> '
-              '${_escape(step.name)} '
-              '<span class="duration">${_formatUs(step.durationUs)}</span>');
-        if (step.error != null) {
-          buffer.writeln('<pre class="error">${_escape(step.error!)}</pre>');
-        }
+          ..writeln('<div class="step-card $stepStatus">')
+          ..writeln('<div class="step-head">'
+              '<span class="step-index">${index + 1}</span> '
+              '<span class="status $stepStatus">$stepStatus</span> '
+              '<span class="duration">${_formatUs(step.durationUs)}</span>'
+              '</div>')
+          ..writeln('<p class="step-name">${_escape(step.name)}</p>');
         if (step.screenshot != null) {
           final bytes = resolveScreenshot?.call(step.screenshot!);
           if (bytes != null) {
@@ -71,14 +73,17 @@ String buildHtmlReport(
                 '${_escape(step.screenshot!)}</p>');
           }
         }
+        if (step.error != null) {
+          buffer.writeln('<pre class="error">${_escape(step.error!)}</pre>');
+        }
         for (final log in step.logs) {
           buffer.writeln('<p class="log">'
               '<span class="source">[${log.source?.name ?? '-'}]</span> '
               '${_escape(log.message)}</p>');
         }
-        buffer.writeln('</li>');
+        buffer.writeln('</div>');
       }
-      buffer.writeln('</ol>');
+      buffer.writeln('</div>');
     }
     buffer.writeln('</details>');
   }
@@ -120,13 +125,25 @@ header h1 { margin: 0 0 4px; font-size: 22px; }
 .status.failed { background: #fde2e2; color: #a11a1a; }
 .status.unknown, .status.skipped { background: #eee; color: #666; }
 .duration { color: #999; font-size: 12px; font-weight: 400; }
-.steps { margin: 10px 0 4px; padding-left: 22px; }
-.step { margin-bottom: 6px; }
+.steps-strip { display: flex; gap: 12px; overflow-x: auto;
+  margin: 12px 0 6px; padding-bottom: 8px; align-items: flex-start; }
+.step-card { flex: 0 0 auto; width: 220px; background: #fafafc;
+  border: 1px solid #e3e3ea; border-radius: 8px; padding: 10px;
+  position: relative; }
+.step-card:not(:last-child)::after { content: "→"; position: absolute;
+  right: -12px; top: 45%; color: #bbb; font-size: 14px; }
+.step-head { display: flex; align-items: center; gap: 6px; }
+.step-index { display: inline-flex; align-items: center;
+  justify-content: center; width: 20px; height: 20px; border-radius: 50%;
+  background: #1a1a2e; color: #fff; font-size: 11px; font-weight: 700; }
+.step-name { font-size: 13px; font-weight: 600; margin: 8px 0 6px;
+  line-height: 1.4; }
 .error { background: #fff5f5; border-left: 3px solid #a11a1a;
-  padding: 8px 10px; white-space: pre-wrap; font-size: 12px; }
-.log { color: #555; font-size: 12px; margin: 2px 0 2px 8px; }
+  padding: 8px 10px; white-space: pre-wrap; font-size: 12px;
+  overflow-wrap: break-word; }
+.log { color: #555; font-size: 12px; margin: 2px 0; }
 .log .source { color: #999; }
-.screenshot { font-size: 12px; color: #555; margin: 8px 0; }
-.screenshot img { max-width: 240px; border: 1px solid #e3e3ea;
+.screenshot { font-size: 12px; color: #555; margin: 8px 0 0; }
+.screenshot img { width: 100%; border: 1px solid #e3e3ea;
   border-radius: 6px; display: block; }
 ''';

@@ -12,6 +12,7 @@ import 'dart:io';
 import 'package:args/args.dart';
 
 import 'enumerate.dart';
+import 'flutter_cli.dart';
 import 'init_command.dart' show writeBundle;
 import 'test_command.dart' show connectToAgent, loadRunConfig, runAndCollect;
 
@@ -62,11 +63,10 @@ Future<int> runDevelopCommand(List<String> args) async {
   // flutter runを起動（ビルド+インストール+起動+アタッチを一括で担う）
   print('[endevir] starting app (flutter run)...');
   final flutterLog = File('${outDir.path}/develop_flutter.log').openWrite();
-  final useFvm = File('.fvmrc').existsSync();
   final process = await Process.start(
-    useFvm ? 'fvm' : 'flutter',
+    flutterExecutable(),
     [
-      if (useFvm) 'flutter',
+      ...flutterArgPrefix(),
       'run',
       '--debug',
       '--machine', // 構造化イベントで起動完了・終了を検知する

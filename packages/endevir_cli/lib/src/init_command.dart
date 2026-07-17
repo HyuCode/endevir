@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:args/args.dart';
 
 import 'enumerate.dart';
+import 'flutter_cli.dart';
 
 /// 雛形（endevir_test/main_test.dart, endevir.yaml）を生成する。
 /// 生成したファイルの相対パス一覧を返す（既存はスキップ）。
@@ -111,8 +112,8 @@ Future<int> runInitCommand(List<String> args) async {
       : ['endevir', 'dev:endevir_cli'];
   print('[endevir] add dependencies: endevir, endevir_cli');
   final result = await Process.run(
-    _flutterExecutable(),
-    [..._flutterPrefix(), 'pub', 'add', ...specs],
+    flutterExecutable(),
+    [...flutterArgPrefix(), 'pub', 'add', ...specs],
   );
   if (result.exitCode != 0) {
     stderr.writeln(result.stderr);
@@ -125,6 +126,3 @@ Future<int> runInitCommand(List<String> args) async {
   return 0;
 }
 
-bool get _useFvm => File('.fvmrc').existsSync();
-String _flutterExecutable() => _useFvm ? 'fvm' : 'flutter';
-List<String> _flutterPrefix() => _useFvm ? ['flutter'] : [];

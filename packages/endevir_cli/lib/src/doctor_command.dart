@@ -3,6 +3,8 @@
 // ignore_for_file: avoid_print
 import 'dart:io';
 
+import 'flutter_cli.dart';
+
 enum DoctorStatus { ok, warn, fail }
 
 class DoctorResult {
@@ -89,7 +91,7 @@ Future<int> runDoctorCommand(List<String> args) async {
 
   // ツールチェーン検査
   results.add(await _checkCommand(
-      'Flutter SDK', _flutterExecutable(), [..._flutterPrefix(), '--version']));
+      'Flutter SDK', flutterExecutable(), [...flutterArgPrefix(), '--version']));
   results.add(checkJavaVersion(await _javaVersion()));
   if (Platform.isMacOS) {
     results.add(await _checkCommand('Xcodeツール', 'xcrun', ['--version']));
@@ -144,6 +146,3 @@ Future<String?> _javaVersion() async {
   }
 }
 
-bool get _useFvm => File('.fvmrc').existsSync();
-String _flutterExecutable() => _useFvm ? 'fvm' : 'flutter';
-List<String> _flutterPrefix() => _useFvm ? ['flutter'] : [];

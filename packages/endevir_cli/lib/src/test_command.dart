@@ -11,6 +11,7 @@ import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:yaml/yaml.dart';
 
 import 'enumerate.dart';
+import 'flutter_cli.dart';
 import 'init_command.dart' show writeBundle;
 
 const _agentPort = 8808;
@@ -188,11 +189,10 @@ void _printProgress(TraceEvent event) {
   }
 }
 
-/// プロジェクトが fvm を使っていれば `fvm flutter`、なければ `flutter`。
+/// flutterコマンドを実行する（fvm対応はflutter_cli.dartで解決）。
 Future<void> _flutter(List<String> args) async {
-  final useFvm = File('.fvmrc').existsSync() || File('../../.fvmrc').existsSync();
-  final executable = useFvm ? 'fvm' : 'flutter';
-  final fullArgs = useFvm ? ['flutter', ...args] : args;
+  final executable = flutterExecutable();
+  final fullArgs = [...flutterArgPrefix(), ...args];
   final process = await Process.start(executable, fullArgs,
       mode: ProcessStartMode.inheritStdio);
   final code = await process.exitCode;

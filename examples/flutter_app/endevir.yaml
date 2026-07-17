@@ -1,0 +1,4 @@
+# Endevir 実行設定（CORE-103）。テスト単位のAPI引数はこの既定値を上書きする。
+timeoutSeconds: 15 # 待機のデフォルトタイムアウト
+stabilityFrames: 3 # タップ前の位置安定判定に必要な連続不変フレーム数
+retries: 1 # 失敗テストのリトライ回数（リトライで通ったものはflakyとして報告）

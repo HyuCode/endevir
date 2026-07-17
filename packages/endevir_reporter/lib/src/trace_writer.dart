@@ -40,7 +40,8 @@ class TraceWriter {
   }
 
   /// テスト開始を記録し、採番したtestIdを返す。
-  int testStart(String name) {
+  /// [attempt]は試行番号（1始まり。リトライで増える、CORE-106）。
+  int testStart(String name, {int attempt = 1}) {
     final testId = ++_nextTestId;
     _emit((seq, now) {
       _testStartedAtUs[testId] = now;
@@ -50,12 +51,13 @@ class TraceWriter {
         timestampUs: now,
         testId: testId,
         name: name,
+        attempt: attempt,
       );
     });
     return testId;
   }
 
-  void testEnd(int testId, TraceStatus status, {String? error}) {
+  void testEnd(int testId, TraceStatus status, {String? error, int attempt = 1}) {
     _emit((seq, now) => TraceEvent(
           type: TraceEventType.TEST_END,
           seq: seq,
@@ -63,6 +65,7 @@ class TraceWriter {
           testId: testId,
           status: status,
           error: error,
+          attempt: attempt,
           durationUs: now - (_testStartedAtUs.remove(testId) ?? now),
         ));
   }

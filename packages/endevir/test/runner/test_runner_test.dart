@@ -128,6 +128,70 @@ void main() {
       expect(testEnd.status, TraceStatus.FAILED);
     });
 
+    test('retries指定時、失敗したテストは再試行され、成功すればflakyとして数えられる', () async {
+      var attempts = 0;
+      registry.add('2回目で成功する', (e) async {
+        attempts++;
+        if (attempts < 2) throw StateError('flake');
+      });
+
+      final summary = await runner().run(registry,
+          runId: 'r', platform: 'android', retries: 2);
+
+      expect(attempts, 2);
+      expect(summary.passed, 1);
+      expect(summary.failed, 0);
+      expect(summary.flaky, 1);
+
+      // trace: attempt=1がfailed、attempt=2がpassedとして両方記録される
+      final ends =
+          parsed().where((e) => e.type == TraceEventType.TEST_END).toList();
+      expect(ends, hasLength(2));
+      expect(ends[0].attempt, 1);
+      expect(ends[0].status, TraceStatus.FAILED);
+      expect(ends[1].attempt, 2);
+      expect(ends[1].status, TraceStatus.PASSED);
+    });
+
+    test('リトライを使い切って失敗したテストはfailedになる', () async {
+      registry.add('常に失敗する', (e) async => throw StateError('boom'));
+
+      final summary = await runner().run(registry,
+          runId: 'r', platform: 'android', retries: 1);
+
+      expect(summary.failed, 1);
+      expect(summary.flaky, 0);
+      final ends =
+          parsed().where((e) => e.type == TraceEventType.TEST_END).toList();
+      expect(ends, hasLength(2), reason: '初回+リトライ1回');
+      expect(ends.map((e) => e.status), everyElement(TraceStatus.FAILED));
+    });
+
+    test('retries=0（既定）ではリトライしない', () async {
+      var attempts = 0;
+      registry.add('失敗する', (e) async {
+        attempts++;
+        throw StateError('boom');
+      });
+
+      await runner().run(registry, runId: 'r', platform: 'android');
+
+      expect(attempts, 1);
+    });
+
+    test('テスト単位のretries指定は実行時設定を上書きする', () async {
+      var attempts = 0;
+      registry.add('個別設定つき', (e) async {
+        attempts++;
+        throw StateError('boom');
+      }, retries: 2);
+
+      // 実行時はretries=0だが、テスト側の指定が優先される
+      await runner().run(registry, runId: 'r', platform: 'android');
+
+      expect(attempts, 3, reason: '初回+リトライ2回');
+    });
+
     test('beforeEachフックが各テストの前に呼ばれる（状態リセット用）', () async {
       final calls = <String>[];
       registry.add('t1', (e) async => calls.add('t1'));

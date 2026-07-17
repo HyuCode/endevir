@@ -9,13 +9,16 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late EndevirAgent agent;
   late List<String?> runCalls; // 記録された only 引数
+  late List<EndevirRunConfig?> configCalls; // 記録された config 引数
 
   setUp(() async {
     runCalls = [];
+    configCalls = [];
     agent = EndevirAgent(
       listTests: () => ['テストA', 'グループ > テストB'],
-      runTests: ({only, required onTraceLine}) async {
+      runTests: ({only, config, required onTraceLine}) async {
         runCalls.add(only);
+        configCalls.add(config);
         onTraceLine('{"type":"runStart","seq":1,"timestampUs":0}');
         onTraceLine('{"type":"runEnd","seq":2,"timestampUs":1}');
         return const RunSummary(total: 2, passed: 1, failed: 1);
@@ -78,8 +81,25 @@ void main() {
 
     final response = messages.whereType<RpcResponse>().single;
     expect(response.id, 3);
-    expect(response.result, {'total': 2, 'passed': 1, 'failed': 1});
+    expect(response.result,
+        {'total': 2, 'passed': 1, 'failed': 1, 'flaky': 0});
     expect(runCalls, ['テストA']);
+    await socket.close();
+  });
+
+  test('runのconfigパラメータが実行設定としてハンドラに渡る（CORE-103）', () async {
+    final socket = await connect();
+    final responses = StreamIterator<dynamic>(socket);
+
+    socket.add(RpcRequest(id: 9, method: 'run', params: {
+      'config': {'timeoutMs': 20000, 'stabilityFrames': 5, 'retries': 2},
+    }).encode());
+    await responses.moveNext();
+
+    final config = configCalls.single!;
+    expect(config.timeout, const Duration(seconds: 20));
+    expect(config.stabilityFrames, 5);
+    expect(config.retries, 2);
     await socket.close();
   });
 

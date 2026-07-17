@@ -5,11 +5,14 @@ typedef EndevirTestBody = Future<void> Function(EndevirTester e);
 
 /// 登録済みテスト。
 class EndevirTestEntry {
-  const EndevirTestEntry(this.name, this.body);
+  const EndevirTestEntry(this.name, this.body, {this.retries});
 
   /// グループ修飾済みの完全名（静的列挙のfullNameと一致する。ADR-005）。
   final String name;
   final EndevirTestBody body;
+
+  /// テスト単位のリトライ回数（nullなら実行時設定に従う。CORE-103/106）。
+  final int? retries;
 }
 
 /// テストの登録先（登録と実行の分離、ADR-005）。
@@ -20,12 +23,12 @@ class EndevirTestRegistry {
   List<EndevirTestEntry> get entries => List.unmodifiable(_entries);
 
   /// テストを登録する。実行はランナーの責務。
-  void add(String name, EndevirTestBody body) {
+  void add(String name, EndevirTestBody body, {int? retries}) {
     final fullName = [..._groupStack, name].join(' > ');
     if (_entries.any((entry) => entry.name == fullName)) {
       throw ArgumentError('duplicate test name: $fullName');
     }
-    _entries.add(EndevirTestEntry(fullName, body));
+    _entries.add(EndevirTestEntry(fullName, body, retries: retries));
   }
 
   /// グループを開いて[body]内の登録名を「group > name」に修飾する。
@@ -48,8 +51,9 @@ class EndevirTestRegistry {
 final endevirRegistry = EndevirTestRegistry();
 
 /// テストを宣言する（登録のみ。実行はランナーが行う）。
-void endevirTest(String name, EndevirTestBody body) =>
-    endevirRegistry.add(name, body);
+/// [retries]でこのテストだけのリトライ回数を指定できる（CORE-103/106）。
+void endevirTest(String name, EndevirTestBody body, {int? retries}) =>
+    endevirRegistry.add(name, body, retries: retries);
 
 /// テストをグループ化する。
 void endevirGroup(String name, void Function() body) =>

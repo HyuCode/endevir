@@ -16,6 +16,9 @@ String traceEventToJson(TraceEvent data) => json.encode(data.toJson());
 ///ADR-004）。
 class TraceEvent {
     
+    ///試行番号（1始まり。testStart/testEndに付与。リトライで増える、CORE-106）
+    int? attempt;
+    
     ///所要時間マイクロ秒（stepEnd/testEnd）
     int? durationUs;
     
@@ -62,6 +65,7 @@ class TraceEvent {
     TraceEventType type;
 
     TraceEvent({
+        this.attempt,
         this.durationUs,
         this.error,
         this.message,
@@ -80,6 +84,7 @@ class TraceEvent {
     });
 
     factory TraceEvent.fromJson(Map<String, dynamic> json) => TraceEvent(
+        attempt: json["attempt"],
         durationUs: json["durationUs"],
         error: json["error"],
         message: json["message"],
@@ -98,6 +103,7 @@ class TraceEvent {
     );
 
     Map<String, dynamic> toJson() => {
+        "attempt": attempt,
         "durationUs": durationUs,
         "error": error,
         "message": message,

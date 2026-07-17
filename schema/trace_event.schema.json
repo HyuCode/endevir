@@ -71,6 +71,10 @@
     "durationUs": {
       "description": "所要時間マイクロ秒（stepEnd/testEnd）",
       "type": "integer"
+    },
+    "attempt": {
+      "description": "試行番号（1始まり。testStart/testEndに付与。リトライで増える、CORE-106）",
+      "type": "integer"
     }
   }
 }

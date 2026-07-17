@@ -15,6 +15,10 @@
  */
 export interface TraceEvent {
     /**
+     * 試行番号（1始まり。testStart/testEndに付与。リトライで増える、CORE-106）
+     */
+    attempt?: number;
+    /**
      * 所要時間マイクロ秒（stepEnd/testEnd）
      */
     durationUs?: number;
@@ -274,6 +278,7 @@ function r(name: string) {
 
 const typeMap: any = {
     "TraceEvent": o([
+        { json: "attempt", js: "attempt", typ: u(undefined, 0) },
         { json: "durationUs", js: "durationUs", typ: u(undefined, 0) },
         { json: "error", js: "error", typ: u(undefined, "") },
         { json: "message", js: "message", typ: u(undefined, "") },

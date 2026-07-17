@@ -7,5 +7,6 @@ library;
 export 'src/generated/trace_event.g.dart';
 export 'src/html_report.dart';
 export 'src/protocol/rpc_message.dart';
+export 'src/run_config.dart';
 export 'src/trace_model.dart';
 export 'src/trace_writer.dart';

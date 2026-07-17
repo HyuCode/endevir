@@ -7,8 +7,10 @@ import 'package:flutter/foundation.dart';
 import '../runner/test_runner.dart';
 
 /// テスト実行ハンドラ。traceの各行を[onTraceLine]でストリームする。
+/// [config]はホストから渡される実行設定（CORE-103）。
 typedef RunHandler = Future<RunSummary> Function({
   String? only,
+  EndevirRunConfig? config,
   required void Function(String traceLine) onTraceLine,
 });
 
@@ -84,8 +86,11 @@ class EndevirAgent {
       case 'listTests':
         return {'tests': listTests()};
       case 'run':
+        final configMap = request.params['config'] as Map<String, dynamic>?;
         final summary = await runTests(
           only: request.params['only'] as String?,
+          config:
+              configMap != null ? EndevirRunConfig.fromMap(configMap) : null,
           onTraceLine: (line) => socket.add(
             RpcNotification(method: 'traceEvent', params: {'line': line})
                 .encode(),
@@ -95,6 +100,7 @@ class EndevirAgent {
           'total': summary.total,
           'passed': summary.passed,
           'failed': summary.failed,
+          'flaky': summary.flaky,
         };
       default:
         throw UnsupportedError('unknown method: ${request.method}');

@@ -7,8 +7,18 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:endevir_reporter/endevir_reporter.dart';
+import 'package:yaml/yaml.dart';
 
 const _agentPort = 8808;
+
+/// プロジェクトルートの endevir.yaml から実行設定を読む（CORE-103）。
+EndevirRunConfig loadRunConfig({String path = 'endevir.yaml'}) {
+  final file = File(path);
+  if (!file.existsSync()) return const EndevirRunConfig();
+  final yaml = loadYaml(file.readAsStringSync());
+  if (yaml is! Map) return const EndevirRunConfig();
+  return EndevirRunConfig.fromYamlMap(yaml);
+}
 
 Future<int> runTestCommand(List<String> args) async {
   final parser = ArgParser()
@@ -56,6 +66,7 @@ Future<int> runTestCommand(List<String> args) async {
       socket,
       outDir: outDir,
       only: options['only'] as String?,
+      config: loadRunConfig(),
     );
     await socket.close();
     return exitCode;
@@ -79,6 +90,7 @@ Future<int> _runAndCollect(
   WebSocket socket, {
   required Directory outDir,
   String? only,
+  required EndevirRunConfig config,
 }) async {
   outDir.createSync(recursive: true);
   final traceFile = File('${outDir.path}/trace.jsonl');
@@ -102,7 +114,7 @@ Future<int> _runAndCollect(
   socket.add(RpcRequest(
     id: 1,
     method: 'run',
-    params: {'only': ?only},
+    params: {'only': ?only, 'config': config.toMap()},
   ).encode());
 
   final response = await completer.future;
@@ -118,9 +130,11 @@ Future<int> _runAndCollect(
 
   final result = response.result!;
   final failed = result['failed'] as int;
+  final flaky = result['flaky'] as int? ?? 0;
   print('');
   print('[endevir] ${result['total']} tests: '
-      '${result['passed']} passed, $failed failed');
+      '${result['passed']} passed, $failed failed'
+      '${flaky > 0 ? ' ($flaky flaky)' : ''}');
   print('[endevir] trace:  ${traceFile.path}');
   print('[endevir] report: ${reportFile.path}');
   return failed > 0 ? 1 : 0;

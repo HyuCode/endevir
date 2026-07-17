@@ -101,6 +101,25 @@ void main() {
       expect(logs[1].stepId, isNull);
     });
 
+    test('testStart/testEndはattempt（試行番号）を記録する', () {
+      writer.runStart(runId: 'r', platform: 'android');
+      final testId = writer.testStart('flakyなテスト', attempt: 2);
+      writer.testEnd(testId, TraceStatus.PASSED, attempt: 2);
+
+      final events = parsed();
+      expect(events[1].attempt, 2);
+      expect(events[2].attempt, 2);
+    });
+
+    test('attempt省略時は1（初回試行）になる', () {
+      writer.runStart(runId: 'r', platform: 'android');
+      final testId = writer.testStart('t');
+      writer.testEnd(testId, TraceStatus.PASSED);
+
+      expect(parsed()[1].attempt, 1);
+      expect(parsed()[2].attempt, 1);
+    });
+
     test('複数ステップでstepIdが一意に採番される', () {
       writer.runStart(runId: 'r', platform: 'android');
       final testId = writer.testStart('t');

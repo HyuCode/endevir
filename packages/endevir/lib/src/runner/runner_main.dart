@@ -34,12 +34,17 @@ Future<void> endevirRunnerMain({
   final agent = EndevirAgent(
     listTests: () =>
         endevirRegistry.entries.map((entry) => entry.name).toList(),
-    runTests: ({only, required onTraceLine}) {
+    runTests: ({only, config, required onTraceLine}) {
+      final effective = config ?? const EndevirRunConfig();
       final writer = TraceWriter(onTraceLine);
       final runner = EndevirTestRunner(
         writer: writer,
-        testerFactory: (testId) =>
-            EndevirTester(writer: writer, testId: testId),
+        testerFactory: (testId) => EndevirTester(
+          writer: writer,
+          testId: testId,
+          defaultTimeout: effective.timeout,
+          stabilityFrames: effective.stabilityFrames,
+        ),
         // テスト間の簡易状態リセット（強い分離はネイティブ写像側で行う）
         beforeEach: () async => popToRoot(),
       );
@@ -48,6 +53,7 @@ Future<void> endevirRunnerMain({
         runId: 'run-${DateTime.now().microsecondsSinceEpoch}',
         platform: defaultTargetPlatform.name,
         only: only,
+        retries: effective.retries,
       );
     },
   );

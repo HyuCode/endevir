@@ -21,6 +21,7 @@ class FrameWaiter {
     bool Function() condition, {
     Duration timeout = const Duration(seconds: 10),
     required String describe,
+    bool keepFramesFlowing = false,
   }) {
     final stopwatch = Stopwatch()..start();
     var evaluations = 0;
@@ -54,6 +55,9 @@ class FrameWaiter {
           completer.complete(WaitResult(stopwatch.elapsed, evaluations));
         } else {
           scheduleCheck();
+          // 連続フレームでの評価が必要な条件（位置安定判定など）は、
+          // 静止した画面ではフレームが流れないため自前で次フレームを要求する
+          if (keepFramesFlowing) _signal.requestFrame();
         }
       });
     }

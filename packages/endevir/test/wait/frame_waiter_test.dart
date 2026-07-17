@@ -121,6 +121,36 @@ void main() {
       });
     });
 
+    test('keepFramesFlowing指定時は不成立の再評価ごとに次フレームを要求する（静止画面での安定判定用）', () {
+      fakeAsync((async) {
+        final signal = ManualFrameSignal();
+        final waiter = FrameWaiter(signal);
+        var count = 0;
+
+        waiter
+            .waitUntil(
+              () => ++count >= 4,
+              describe: 'needs continuous frames',
+              keepFramesFlowing: true,
+            )
+            .ignore();
+        async.flushMicrotasks();
+        expect(signal.requestedFrames, 1, reason: '登録時の初回要求');
+
+        signal.tick(); // 評価2回目（不成立）→ 次フレーム要求
+        async.flushMicrotasks();
+        expect(signal.requestedFrames, 2);
+
+        signal.tick(); // 評価3回目（不成立）→ 次フレーム要求
+        async.flushMicrotasks();
+        expect(signal.requestedFrames, 3);
+
+        signal.tick(); // 評価4回目（成立）→ 追加要求なし
+        async.flushMicrotasks();
+        expect(signal.requestedFrames, 3);
+      });
+    });
+
     test('タイムアウト後はフレームが来ても再評価しない', () {
       fakeAsync((async) {
         final signal = ManualFrameSignal();

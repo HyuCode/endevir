@@ -83,6 +83,9 @@ class EndevirElement {
       () => tracker.update(_currentCenter()),
       timeout: timeout ?? _tester.defaultTimeout,
       describe: 'tap(stable): ${_finder.describe()}',
+      // 安定判定は連続フレームでの評価が前提（静止画面ではフレームが
+      // 流れないため、評価ごとに次フレームを要求する）
+      keepFramesFlowing: true,
     );
     final center = _currentCenter();
     if (center == null) {

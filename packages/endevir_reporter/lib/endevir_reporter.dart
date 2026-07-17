@@ -5,4 +5,5 @@
 library;
 
 export 'src/generated/trace_event.g.dart';
+export 'src/protocol/rpc_message.dart';
 export 'src/trace_writer.dart';

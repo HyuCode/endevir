@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:endevir/src/agent/endevir_agent.dart';
@@ -16,10 +17,11 @@ void main() {
     configCalls = [];
     agent = EndevirAgent(
       listTests: () => ['テストA', 'グループ > テストB'],
-      runTests: ({only, config, required onTraceLine}) async {
+      runTests: ({only, config, required onTraceLine, required onScreenshot}) async {
         runCalls.add(only);
         configCalls.add(config);
         onTraceLine('{"type":"runStart","seq":1,"timestampUs":0}');
+        onScreenshot('shots/1.png', [137, 80, 78, 71]);
         onTraceLine('{"type":"runEnd","seq":2,"timestampUs":1}');
         return const RunSummary(total: 2, passed: 1, failed: 1);
       },
@@ -75,9 +77,15 @@ void main() {
     await done.future;
 
     final notifications = messages.whereType<RpcNotification>().toList();
-    expect(notifications, hasLength(2));
+    expect(notifications, hasLength(3));
     expect(notifications.first.method, 'traceEvent');
     expect(notifications.first.params['line'], contains('runStart'));
+
+    // スクリーンショットはbase64つき通知として届く
+    final shot =
+        notifications.firstWhere((n) => n.method == 'screenshot');
+    expect(shot.params['path'], 'shots/1.png');
+    expect(base64Decode(shot.params['base64'] as String), [137, 80, 78, 71]);
 
     final response = messages.whereType<RpcResponse>().single;
     expect(response.id, 3);

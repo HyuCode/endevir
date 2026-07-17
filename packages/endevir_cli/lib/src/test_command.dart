@@ -126,6 +126,14 @@ Future<int> runAndCollect(
       sink.writeln(line);
       events.add(traceEventFromJson(line));
       _printProgress(events.last);
+    } else if (message is RpcNotification &&
+        message.method == 'screenshot') {
+      // スクリーンショットを保存（パスはtraceのstepEnd.screenshotと対応する）
+      final file =
+          File('${outDir.path}/${message.params['path'] as String}');
+      file
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(base64Decode(message.params['base64'] as String));
     } else if (message is RpcResponse) {
       completer.complete(message);
     }
@@ -147,7 +155,13 @@ Future<int> runAndCollect(
     return 1;
   }
   final reportFile = File('${outDir.path}/report.html');
-  reportFile.writeAsStringSync(buildHtmlReport(TraceModel.fromEvents(events)));
+  reportFile.writeAsStringSync(buildHtmlReport(
+    TraceModel.fromEvents(events),
+    resolveScreenshot: (path) {
+      final file = File('${outDir.path}/$path');
+      return file.existsSync() ? file.readAsBytesSync() : null;
+    },
+  ));
 
   final result = response.result!;
   final failed = result['failed'] as int;

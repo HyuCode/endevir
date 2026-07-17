@@ -7,7 +7,12 @@ import 'trace_model.dart';
 ///
 /// 外部リソースへの参照を持たず、そのまま共有できる。
 /// 手順+結果をステップバイステップで確認できることを優先する（RPT-102の原型）。
-String buildHtmlReport(TraceModel model) {
+/// [resolveScreenshot]がパスに対して画像バイト列を返すと、data URIとして
+/// インライン埋め込みされる（自己完結を保つ）。
+String buildHtmlReport(
+  TraceModel model, {
+  List<int>? Function(String path)? resolveScreenshot,
+}) {
   final buffer = StringBuffer()
     ..writeln('<!doctype html>')
     ..writeln('<html lang="ja">')
@@ -55,8 +60,16 @@ String buildHtmlReport(TraceModel model) {
           buffer.writeln('<pre class="error">${_escape(step.error!)}</pre>');
         }
         if (step.screenshot != null) {
-          buffer.writeln('<p class="screenshot">📸 '
-              '${_escape(step.screenshot!)}</p>');
+          final bytes = resolveScreenshot?.call(step.screenshot!);
+          if (bytes != null) {
+            buffer.writeln('<figure class="screenshot">'
+                '<img alt="${_escape(step.name)}" loading="lazy" '
+                'src="data:image/png;base64,${base64Encode(bytes)}">'
+                '</figure>');
+          } else {
+            buffer.writeln('<p class="screenshot">📸 '
+                '${_escape(step.screenshot!)}</p>');
+          }
         }
         for (final log in step.logs) {
           buffer.writeln('<p class="log">'
@@ -113,5 +126,7 @@ header h1 { margin: 0 0 4px; font-size: 22px; }
   padding: 8px 10px; white-space: pre-wrap; font-size: 12px; }
 .log { color: #555; font-size: 12px; margin: 2px 0 2px 8px; }
 .log .source { color: #999; }
-.screenshot { font-size: 12px; color: #555; }
+.screenshot { font-size: 12px; color: #555; margin: 8px 0; }
+.screenshot img { max-width: 240px; border: 1px solid #e3e3ea;
+  border-radius: 6px; display: block; }
 ''';

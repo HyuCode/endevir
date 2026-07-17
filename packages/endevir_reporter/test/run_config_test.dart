@@ -44,5 +44,26 @@ void main() {
       expect(config.stabilityFrames, 4);
       expect(config.retries, 1);
     });
+
+    test('screenshotMode（記録プリセット、RPT-004）を運べる', () {
+      expect(const EndevirRunConfig().screenshotMode,
+          ScreenshotMode.onFailure); // 既定は失敗時のみ
+
+      final evidence =
+          EndevirRunConfig.fromYamlMap({'screenshotMode': 'evidence'});
+      expect(evidence.screenshotMode, ScreenshotMode.evidence);
+
+      final roundtrip = EndevirRunConfig.fromMap(
+        const EndevirRunConfig(screenshotMode: ScreenshotMode.evidence)
+            .toMap(),
+      );
+      expect(roundtrip.screenshotMode, ScreenshotMode.evidence);
+    });
+
+    test('不明なscreenshotModeは既定値にフォールバックする', () {
+      final config =
+          EndevirRunConfig.fromYamlMap({'screenshotMode': 'unknown'});
+      expect(config.screenshotMode, ScreenshotMode.onFailure);
+    });
   });
 }

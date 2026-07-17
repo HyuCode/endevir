@@ -1,6 +1,7 @@
 import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:flutter/widgets.dart';
 
+import '../evidence/evidence_recorder.dart';
 import '../finder/finder.dart';
 import '../interaction/pointer_synthesizer.dart';
 import '../wait/frame_signal.dart';
@@ -20,10 +21,14 @@ class EndevirTester {
     Element Function()? rootResolver,
     this.stabilityFrames = 3,
     this.defaultTimeout = const Duration(seconds: 10),
+    EvidenceRecorder? evidence,
+    this.screenshotMode = ScreenshotMode.onFailure,
+    this.attempt = 1,
   })  : _writer = writer,
         _testId = testId,
         _waiter = FrameWaiter(frameSignal),
-        _rootResolver = rootResolver ?? _defaultRoot;
+        _rootResolver = rootResolver ?? _defaultRoot,
+        _evidence = evidence;
 
   static Element _defaultRoot() => WidgetsBinding.instance.rootElement!;
 
@@ -32,6 +37,13 @@ class EndevirTester {
   final FrameWaiter _waiter;
   final Element Function() _rootResolver;
   final PointerSynthesizer _pointer = PointerSynthesizer();
+  final EvidenceRecorder? _evidence;
+
+  /// スクリーンショットの記録プリセット（RPT-004）。
+  final ScreenshotMode screenshotMode;
+
+  /// このテストの試行番号（onFirstRetryモードの判定に使う）。
+  final int attempt;
 
   /// タップ前の位置安定判定に必要な連続不変フレーム数（CORE-103で上書き可能）。
   final int stabilityFrames;
@@ -40,15 +52,39 @@ class EndevirTester {
   final Duration defaultTimeout;
 
   /// 手順を命名して実行する。証跡の表示単位になる（CORE-006 / RPT-003）。
+  ///
+  /// スクリーンショットは[screenshotMode]に従い、ステップ完了時点の画面を
+  /// 記録する（GPUスナップショットのみ同期、エンコードは遅延。ADR-004）。
   Future<T> step<T>(String name, Future<T> Function() body) async {
     final stepId = _writer.stepStart(name, testId: _testId);
     try {
       final result = await body();
-      _writer.stepEnd(stepId, TraceStatus.PASSED);
+      _writer.stepEnd(stepId, TraceStatus.PASSED,
+          screenshot: await _captureIf(passed: true, stepId: stepId));
       return result;
     } catch (e) {
-      _writer.stepEnd(stepId, TraceStatus.FAILED, error: '$e');
+      _writer.stepEnd(stepId, TraceStatus.FAILED,
+          error: '$e',
+          screenshot: await _captureIf(passed: false, stepId: stepId));
       rethrow;
+    }
+  }
+
+  Future<String?> _captureIf({required bool passed, required int stepId}) async {
+    final recorder = _evidence;
+    if (recorder == null) return null;
+    final shouldCapture = switch (screenshotMode) {
+      ScreenshotMode.evidence => true,
+      ScreenshotMode.onFailure => !passed,
+      ScreenshotMode.onFirstRetry => attempt > 1,
+      ScreenshotMode.none => false,
+    };
+    if (!shouldCapture) return null;
+    try {
+      return await recorder.captureForStep(stepId);
+    } catch (e) {
+      _writer.log(LogSource.RUNNER, 'screenshot failed: $e', stepId: stepId);
+      return null;
     }
   }
 

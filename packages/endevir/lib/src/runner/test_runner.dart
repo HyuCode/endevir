@@ -27,14 +27,14 @@ class RunSummary {
 class EndevirTestRunner {
   EndevirTestRunner({
     required TraceWriter writer,
-    required EndevirTester Function(int testId) testerFactory,
+    required EndevirTester Function(int testId, int attempt) testerFactory,
     Future<void> Function()? beforeEach,
   })  : _writer = writer,
         _testerFactory = testerFactory,
         _beforeEach = beforeEach;
 
   final TraceWriter _writer;
-  final EndevirTester Function(int testId) _testerFactory;
+  final EndevirTester Function(int testId, int attempt) _testerFactory;
 
   /// 各テストの直前に呼ばれるフック（画面状態のリセット等）。
   final Future<void> Function()? _beforeEach;
@@ -65,7 +65,7 @@ class EndevirTestRunner {
         await _beforeEach?.call();
         final testId = _writer.testStart(entry.name, attempt: attempt);
         try {
-          await entry.body(_testerFactory(testId));
+          await entry.body(_testerFactory(testId, attempt));
           _writer.testEnd(testId, TraceStatus.PASSED, attempt: attempt);
           passed++;
           if (attempt > 1) flaky++;

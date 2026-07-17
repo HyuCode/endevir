@@ -2,6 +2,7 @@
 library;
 
 export 'src/agent/endevir_agent.dart';
+export 'src/evidence/evidence_recorder.dart';
 export 'src/finder/finder.dart';
 export 'src/interaction/navigation.dart';
 export 'src/interaction/pointer_synthesizer.dart';

@@ -20,8 +20,8 @@ void main() {
 
   EndevirTestRunner runner() => EndevirTestRunner(
         writer: writer,
-        testerFactory: (testId) =>
-            EndevirTester(writer: writer, testId: testId),
+        testerFactory: (testId, attempt) =>
+            EndevirTester(writer: writer, testId: testId, attempt: attempt),
       );
 
   group('EndevirTestRegistry', () {
@@ -199,8 +199,8 @@ void main() {
 
       final withHook = EndevirTestRunner(
         writer: writer,
-        testerFactory: (testId) =>
-            EndevirTester(writer: writer, testId: testId),
+        testerFactory: (testId, attempt) =>
+            EndevirTester(writer: writer, testId: testId, attempt: attempt),
         beforeEach: () async => calls.add('reset'),
       );
       await withHook.run(registry, runId: 'r', platform: 'android');

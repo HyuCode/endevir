@@ -1,12 +1,16 @@
+import 'package:endevir/src/evidence/evidence_recorder.dart';
 import 'package:endevir/src/tester/endevir_tester.dart';
 import 'package:endevir/src/wait/wait_exception.dart';
 import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../evidence/evidence_recorder_test.dart' show FakeCapturer;
 import '../wait/frame_waiter_test.dart' show ManualFrameSignal;
 
 void main() {
+  group('スクリーンショット統合', _screenshotTests);
+
   late List<String> lines;
   late TraceWriter writer;
   late ManualFrameSignal signal;
@@ -115,6 +119,86 @@ void main() {
 
     expect(error, isA<WaitTimeoutException>());
     expect('$error', contains('missing'));
+  });
+}
+
+// --- 証跡（スクリーンショット）統合 ---
+
+void _screenshotTests() {
+  late List<String> lines;
+  late TraceWriter writer;
+  late FakeCapturer capturer;
+  late List<String> delivered;
+  late EvidenceRecorder recorder;
+
+  setUp(() {
+    lines = [];
+    writer = TraceWriter(lines.add, nowUs: () => 0);
+    capturer = FakeCapturer();
+    delivered = [];
+    recorder = EvidenceRecorder(
+      capturer: capturer,
+      deliver: (path, bytes) => delivered.add(path),
+    );
+  });
+
+  List<TraceEvent> parsed() =>
+      lines.map((line) => traceEventFromJson(line)).toList();
+
+  EndevirTester tester(ScreenshotMode mode, {int attempt = 1}) =>
+      EndevirTester(
+        writer: writer,
+        testId: 1,
+        evidence: recorder,
+        screenshotMode: mode,
+        attempt: attempt,
+      );
+
+  testWidgets('証跡モード: 成功したstepもスクリーンショットを記録する', (t) async {
+    final e = tester(ScreenshotMode.evidence);
+
+    await e.step('手順', () async {});
+    capturer.encodes.single.complete([1]);
+    await recorder.flush();
+
+    final stepEnd =
+        parsed().firstWhere((ev) => ev.type == TraceEventType.STEP_END);
+    expect(stepEnd.screenshot, 'shots/1.png');
+    expect(delivered, ['shots/1.png']);
+  });
+
+  testWidgets('onFailureモード: 失敗したstepのみ記録する', (t) async {
+    final e = tester(ScreenshotMode.onFailure);
+
+    await e.step('成功する手順', () async {});
+    await expectLater(
+      e.step('失敗する手順', () async => throw StateError('boom')),
+      throwsStateError,
+    );
+
+    final stepEnds =
+        parsed().where((ev) => ev.type == TraceEventType.STEP_END).toList();
+    expect(stepEnds[0].screenshot, isNull);
+    expect(stepEnds[1].screenshot, isNotNull);
+    expect(capturer.captured, 1);
+  });
+
+  testWidgets('onFirstRetryモード: attempt>1でのみ記録する', (t) async {
+    await tester(ScreenshotMode.onFirstRetry).step('初回', () async {});
+    expect(capturer.captured, 0);
+
+    await tester(ScreenshotMode.onFirstRetry, attempt: 2)
+        .step('リトライ', () async {});
+    expect(capturer.captured, 1);
+  });
+
+  testWidgets('noneモード: 記録しない', (t) async {
+    await expectLater(
+      tester(ScreenshotMode.none)
+          .step('失敗', () async => throw StateError('x')),
+      throwsStateError,
+    );
+    expect(capturer.captured, 0);
   });
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:endevir_reporter/endevir_reporter.dart';
@@ -12,6 +13,7 @@ typedef RunHandler = Future<RunSummary> Function({
   String? only,
   EndevirRunConfig? config,
   required void Function(String traceLine) onTraceLine,
+  required void Function(String path, List<int> bytes) onScreenshot,
 });
 
 /// アプリ内エージェント（ADR-002）。
@@ -94,6 +96,12 @@ class EndevirAgent {
           onTraceLine: (line) => socket.add(
             RpcNotification(method: 'traceEvent', params: {'line': line})
                 .encode(),
+          ),
+          onScreenshot: (path, bytes) => socket.add(
+            RpcNotification(method: 'screenshot', params: {
+              'path': path,
+              'base64': base64Encode(bytes),
+            }).encode(),
           ),
         );
         return {

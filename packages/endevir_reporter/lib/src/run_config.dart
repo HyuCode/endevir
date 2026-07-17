@@ -1,3 +1,21 @@
+/// スクリーンショットの記録プリセット（RPT-004）。
+enum ScreenshotMode {
+  /// 成功時も全ステップで記録する（証跡モード。ADR-004により実質ゼロコスト）
+  evidence,
+
+  /// 失敗したステップのみ記録する（既定）
+  onFailure,
+
+  /// リトライ試行（attempt > 1）でのみ全ステップ記録する
+  onFirstRetry,
+
+  /// 記録しない
+  none;
+
+  static ScreenshotMode parse(String? value, {required ScreenshotMode fallback}) =>
+      ScreenshotMode.values.asNameMap()[value] ?? fallback;
+}
+
 /// 実行設定（CORE-103）。
 ///
 /// ホスト（CLI）が `endevir.yaml` から構築し、run RPCで運び、
@@ -8,6 +26,7 @@ class EndevirRunConfig {
     this.timeout = const Duration(seconds: 10),
     this.stabilityFrames = 3,
     this.retries = 0,
+    this.screenshotMode = ScreenshotMode.onFailure,
   });
 
   /// RPCパラメータ（toMapの形）から復元する。
@@ -21,6 +40,10 @@ class EndevirRunConfig {
       stabilityFrames:
           map['stabilityFrames'] as int? ?? defaults.stabilityFrames,
       retries: map['retries'] as int? ?? defaults.retries,
+      screenshotMode: ScreenshotMode.parse(
+        map['screenshotMode'] as String?,
+        fallback: defaults.screenshotMode,
+      ),
     );
   }
 
@@ -35,6 +58,10 @@ class EndevirRunConfig {
       stabilityFrames:
           yaml['stabilityFrames'] as int? ?? defaults.stabilityFrames,
       retries: yaml['retries'] as int? ?? defaults.retries,
+      screenshotMode: ScreenshotMode.parse(
+        yaml['screenshotMode'] as String?,
+        fallback: defaults.screenshotMode,
+      ),
     );
   }
 
@@ -47,9 +74,13 @@ class EndevirRunConfig {
   /// テスト単位のリトライ回数（CORE-106。0でリトライなし）。
   final int retries;
 
+  /// スクリーンショットの記録プリセット（RPT-004）。
+  final ScreenshotMode screenshotMode;
+
   Map<String, dynamic> toMap() => {
         'timeoutMs': timeout.inMilliseconds,
         'stabilityFrames': stabilityFrames,
         'retries': retries,
+        'screenshotMode': screenshotMode.name,
       };
 }

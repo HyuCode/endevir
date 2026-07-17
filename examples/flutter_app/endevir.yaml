@@ -2,3 +2,4 @@
 timeoutSeconds: 15 # 待機のデフォルトタイムアウト
 stabilityFrames: 3 # タップ前の位置安定判定に必要な連続不変フレーム数
 retries: 1 # 失敗テストのリトライ回数（リトライで通ったものはflakyとして報告）
+screenshotMode: evidence # 成功時も全ステップのスクリーンショットを記録（証跡モード）

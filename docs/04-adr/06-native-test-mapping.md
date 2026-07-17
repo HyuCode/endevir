@@ -37,7 +37,7 @@
 ## 制約・未検証
 
 - iOS（XCUITest）写像は同じ構造の適用可能性が高いが未検証（P1）
-- Firebase Test Labでの実行はM6で確認する（instrumentation形式のため原理的には可能）
+- ~~Firebase Test Labでの実行はM6で確認する~~ → **確認済み（2026-07-17）**: MediumPhone.arm / Android 13で5テストケースすべてパス。注意: app APKは必ずテストエントリポイント（エージェント入り）でビルドすること（`endevir native android --build` が正しい組み合わせを生成する）
 - スパイクのHTTP/1.1手書きクライアントはchunked encodingを正しく処理していない（本実装はADR-002のWebSocket+JSON-RPCに置き換わるため問題にしない）
 - テストごとのアプリ再起動は分離性と引き換えに時間コストがある（5テスト24秒）。「再起動あり/なし」を選択可能にする設計をM1で検討
 

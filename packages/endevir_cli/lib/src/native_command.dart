@@ -199,6 +199,8 @@ const _androidTestManifest = '''
 Future<int> runNativeCommand(List<String> args) async {
   final parser = ArgParser()
     ..addFlag('run', help: 'connectedAndroidTestを実行する')
+    ..addFlag('build',
+        help: 'デバイスファーム持ち込み用APK（app + androidTest）をビルドする')
     ..addOption('device', abbr: 'd', help: 'adbシリアル（--run時）')
     ..addOption('target',
         abbr: 't', defaultsTo: 'endevir_test/main_test.dart')
@@ -214,15 +216,15 @@ Future<int> runNativeCommand(List<String> args) async {
   scaffoldAndroidNative(Directory.current.path);
   print('[endevir] android instrumentation scaffold updated');
 
+  if (rest['build'] as bool) {
+    return _buildFarmApks(rest['target'] as String);
+  }
+
   if (!(rest['run'] as bool)) {
     print('');
     print('[endevir] 次のステップ:');
-    print('  ローカル実行:      endevir native android --run');
-    print('  Firebase Test Lab: endevir build配布物を作成後、');
-    print('    gcloud firebase test android run \\\\');
-    print('      --type instrumentation \\\\');
-    print('      --app build/app/outputs/flutter-apk/app-debug.apk \\\\');
-    print('      --test build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk');
+    print('  ローカル実行:              endevir native android --run');
+    print('  デバイスファーム用APK作成: endevir native android --build');
     return 0;
   }
 
@@ -246,6 +248,49 @@ Future<int> runNativeCommand(List<String> args) async {
     mode: ProcessStartMode.inheritStdio,
   );
   return process.exitCode;
+}
+
+/// デバイスファーム（Firebase Test Lab等）持ち込み用のAPKをビルドする。
+/// app APKは必ずテストエントリポイント（エージェント入り）でビルドする——
+/// 素のlib/main.dartビルドを持ち込むと全テストがエージェント接続待ちで失敗する。
+Future<int> _buildFarmApks(String target) async {
+  print('[endevir] build app APK (target: $target)');
+  final flutterProcess = await Process.start(
+    flutterExecutable(),
+    [...flutterArgPrefix(), 'build', 'apk', '--debug', '-t', target],
+    mode: ProcessStartMode.inheritStdio,
+  );
+  if (await flutterProcess.exitCode != 0) return 1;
+
+  final environment = Map<String, String>.from(Platform.environment);
+  final jdk = await _resolveJdk();
+  if (jdk != null) environment['JAVA_HOME'] = jdk;
+
+  print('[endevir] build androidTest APK');
+  final gradleProcess = await Process.start(
+    './gradlew',
+    [':app:assembleDebugAndroidTest', '-Ptarget=$target'],
+    workingDirectory: 'android',
+    environment: environment,
+    mode: ProcessStartMode.inheritStdio,
+  );
+  if (await gradleProcess.exitCode != 0) return 1;
+
+  const appApk = 'build/app/outputs/flutter-apk/app-debug.apk';
+  const testApk =
+      'build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk';
+  print('');
+  print('[endevir] APKを生成しました:');
+  print('  app:  $appApk');
+  print('  test: $testApk');
+  print('');
+  print('[endevir] Firebase Test Labで実行するには:');
+  print('  gcloud firebase test android run \\');
+  print('    --type instrumentation \\');
+  print('    --app $appApk \\');
+  print('    --test $testApk \\');
+  print('    --device model=MediumPhone.arm,version=33');
+  return 0;
 }
 
 /// Gradle/Kotlinと互換のあるJDK（17〜21）を探す。

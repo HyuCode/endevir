@@ -1,0 +1,1 @@
+[{"fullName":"ホーム画面が表示される","file":"home_test.dart"},{"fullName":"無限アニメーション下でもカウントアップできる","file":"screens_test.dart"},{"fullName":"遅延ロード（3秒）をsleepなしで待てる","file":"screens_test.dart"},{"fullName":"有限アニメーションの完了を検証できる","file":"screens_test.dart"},{"fullName":"フォームに入力して送信できる","file":"screens_test.dart"}]

@@ -47,16 +47,70 @@ class EndevirAgent {
   }
 
   Future<void> _handleHttp(HttpRequest request) async {
-    if (request.uri.path != '/ws') {
-      request.response.statusCode = HttpStatus.notFound;
-      await request.response.close();
+    switch (request.uri.path) {
+      case '/ws':
+        final socket = await WebSocketTransformer.upgrade(request);
+        socket.listen(
+          (data) => _handleMessage(socket, data),
+          onError: (Object e) => debugPrint('ENDEVIR-AGENT ws error: $e'),
+        );
+      case '/ping':
+        await _respondJson(request, HttpStatus.ok, {'pong': true});
+      case '/runTest':
+        // ネイティブ写像（ADR-006）: instrumentationテストケースからの
+        // 1テスト実行要求。デバイス内のためHTTP補助エンドポイントで受ける
+        await _handleNativeRunTest(request);
+      default:
+        request.response.statusCode = HttpStatus.notFound;
+        await request.response.close();
+    }
+  }
+
+  Future<void> _handleNativeRunTest(HttpRequest request) async {
+    final name = request.uri.queryParameters['name'];
+    if (name == null || name.isEmpty) {
+      await _respondJson(request, HttpStatus.badRequest,
+          {'error': 'name query parameter is required'});
       return;
     }
-    final socket = await WebSocketTransformer.upgrade(request);
-    socket.listen(
-      (data) => _handleMessage(socket, data),
-      onError: (Object e) => debugPrint('ENDEVIR-AGENT ws error: $e'),
-    );
+    try {
+      // trace行をバッファし、testEndからエラー詳細を抽出して応答に含める
+      final traceLines = <String>[];
+      final summary = await runTests(
+        only: name,
+        onTraceLine: traceLines.add,
+        onScreenshot: (path, bytes) {}, // ローカル保存はrunner_mainのteeが担う
+      );
+      String? error;
+      for (final line in traceLines) {
+        final event = traceEventFromJson(line);
+        if (event.type == TraceEventType.TEST_END && event.error != null) {
+          error = event.error;
+        }
+      }
+      await _respondJson(request, HttpStatus.ok, {
+        'status': summary.failed == 0 && summary.total > 0
+            ? 'passed'
+            : (summary.total == 0 ? 'notFound' : 'failed'),
+        'name': name,
+        'error': ?error,
+      });
+    } catch (e) {
+      await _respondJson(
+          request, HttpStatus.internalServerError, {'error': '$e'});
+    }
+  }
+
+  Future<void> _respondJson(
+    HttpRequest request,
+    int status,
+    Map<String, Object?> body,
+  ) async {
+    request.response
+      ..statusCode = status
+      ..headers.contentType = ContentType.json
+      ..write(jsonEncode(body));
+    await request.response.close();
   }
 
   Future<void> _handleMessage(WebSocket socket, dynamic data) async {

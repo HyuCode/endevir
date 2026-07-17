@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late EndevirAgent agent;
+  EndevirAgent? agent2; // 追加エージェント（個別ハンドラ検証用）
   late List<String?> runCalls; // 記録された only 引数
   late List<EndevirRunConfig?> configCalls; // 記録された config 引数
 
@@ -29,7 +30,11 @@ void main() {
     await agent.start(port: 0); // エフェメラルポート
   });
 
-  tearDown(() => agent.stop());
+  tearDown(() async {
+    await agent.stop();
+    await agent2?.stop();
+    agent2 = null;
+  });
 
   Future<WebSocket> connect() =>
       WebSocket.connect('ws://127.0.0.1:${agent.port}/ws');
@@ -109,6 +114,66 @@ void main() {
     expect(config.stabilityFrames, 5);
     expect(config.retries, 2);
     await socket.close();
+  });
+
+  group('ネイティブ写像用HTTPエンドポイント（ADR-006）', () {
+    Future<(int, String)> httpGet(String pathWithQuery) async {
+      final client = HttpClient();
+      final request = await client.getUrl(
+          Uri.parse('http://127.0.0.1:${agent.port}$pathWithQuery'));
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      client.close();
+      return (response.statusCode, body);
+    }
+
+    test('GET /ping は200でpongを返す', () async {
+      final (status, body) = await httpGet('/ping');
+
+      expect(status, 200);
+      expect(jsonDecode(body), {'pong': true});
+    });
+
+    test('GET /runTest は指定テストを実行し、結果を返す', () async {
+      final (status, body) =
+          await httpGet('/runTest?name=${Uri.encodeQueryComponent("テストA")}');
+
+      expect(status, 200);
+      final result = jsonDecode(body) as Map<String, dynamic>;
+      expect(result['status'], 'failed', reason: 'fakeハンドラはfailed=1を返す');
+      expect(runCalls, ['テストA']);
+    });
+
+    test('GET /runTest はtraceのtestEndからエラー詳細を抽出する', () async {
+      agent2 = EndevirAgent(
+        listTests: () => ['落ちるテスト'],
+        runTests: ({only, config, required onTraceLine, required onScreenshot}) async {
+          onTraceLine('{"type":"testStart","seq":1,"timestampUs":0,'
+              '"testId":1,"name":"落ちるテスト"}');
+          onTraceLine('{"type":"testEnd","seq":2,"timestampUs":1,'
+              '"testId":1,"status":"failed","error":"TimeoutException: xyz"}');
+          return const RunSummary(total: 1, passed: 0, failed: 1);
+        },
+      );
+      await agent2!.start(port: 0);
+
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse(
+          'http://127.0.0.1:${agent2!.port}/runTest?name=x'));
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      client.close();
+
+      final result = jsonDecode(body) as Map<String, dynamic>;
+      expect(result['status'], 'failed');
+      expect(result['error'], contains('TimeoutException: xyz'));
+    });
+
+    test('nameパラメータなしの/runTestは400になる', () async {
+      final (status, _) = await httpGet('/runTest');
+
+      expect(status, 400);
+    });
   });
 
   test('未知のメソッドはエラー応答になる', () async {

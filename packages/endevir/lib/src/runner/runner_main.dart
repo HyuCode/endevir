@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -38,11 +40,26 @@ Future<void> endevirRunnerMain({
         endevirRegistry.entries.map((entry) => entry.name).toList(),
     runTests: ({only, config, required onTraceLine, required onScreenshot}) async {
       final effective = config ?? const EndevirRunConfig();
-      final writer = TraceWriter(onTraceLine);
+      // ローカルtee: ホスト不在の実行（デバイスファーム上のネイティブ写像等）でも
+      // 証跡がデバイス内に残るよう、trace/スクリーンショットを常にファイルへも書く
+      final localDir = Directory('${Directory.systemTemp.path}/endevir')
+        ..createSync(recursive: true);
+      final localTrace =
+          File('${localDir.path}/trace.jsonl').openWrite(mode: FileMode.write);
+      debugPrint('ENDEVIR-TRACE ${localDir.path}/trace.jsonl');
+      final writer = TraceWriter((line) {
+        localTrace.writeln(line);
+        onTraceLine(line);
+      });
       final logCorrelator = LogCorrelator();
       final recorder = EvidenceRecorder(
         capturer: const DebugLayerFrameCapturer(),
-        deliver: onScreenshot,
+        deliver: (path, bytes) {
+          File('${localDir.path}/$path')
+            ..createSync(recursive: true)
+            ..writeAsBytesSync(bytes);
+          onScreenshot(path, bytes);
+        },
       );
       final runner = EndevirTestRunner(
         writer: writer,
@@ -69,6 +86,8 @@ Future<void> endevirRunnerMain({
       );
       // 遅延エンコードの完了（=全スクリーンショットの配送）を待ってから応答する
       await recorder.flush();
+      await localTrace.flush();
+      await localTrace.close();
       return summary;
     },
   );

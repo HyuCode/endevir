@@ -45,3 +45,11 @@ flutter {
     source = "../.."
 }
 
+
+dependencies {
+    // Endevir: instrumentationテスト（ネイティブ写像）用。
+    // バージョンはFlutterのdebug embeddingが持ち込むandroidx.test:runner 1.2.0
+    // に合わせる（AGPのconsistent resolutionとの衝突回避、ADR-006）
+    androidTestImplementation("androidx.test.ext:junit:1.1.1")
+    androidTestImplementation("androidx.test:runner:1.2.0")
+}

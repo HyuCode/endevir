@@ -3,11 +3,15 @@
 // Androidエミュレータ/実機（adb）をサポートする。
 // ignore_for_file: avoid_print
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:yaml/yaml.dart';
+
+import 'enumerate.dart';
+import 'init_command.dart' show writeBundle;
 
 const _agentPort = 8808;
 
@@ -48,6 +52,22 @@ Future<int> runTestCommand(List<String> args) async {
 
   final target = options['target'] as String;
   final outDir = Directory(options['out'] as String);
+
+  // ビルド時テスト列挙+バンドル再生成（CORE-104/110、ADR-005）
+  if (Directory('endevir_test').existsSync()) {
+    final enumeration = enumerateTests('endevir_test');
+    for (final warning in enumeration.warnings) {
+      print('[endevir] WARNING: $warning');
+    }
+    writeBundle(enumeration);
+    outDir.createSync(recursive: true);
+    File('${outDir.path}/test_manifest.json').writeAsStringSync(jsonEncode([
+      for (final entry in enumeration.entries)
+        {'fullName': entry.fullName, 'file': entry.file},
+    ]));
+    print('[endevir] ${enumeration.entries.length} tests '
+        'in ${enumeration.files.length} files (bundle regenerated)');
+  }
 
   print('[endevir] build ($platform, target: $target)');
   final launcher = platform == 'ios'

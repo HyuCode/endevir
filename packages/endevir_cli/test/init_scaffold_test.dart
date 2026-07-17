@@ -21,7 +21,7 @@ dependencies:
   tearDown(() => tempDir.deleteSync(recursive: true));
 
   group('scaffoldProject', () {
-    test('endevir_test/main_test.dart と endevir.yaml を生成する', () {
+    test('バンドル方式の雛形一式（bootstrap+サンプル+バンドル+設定）を生成する', () {
       final created = scaffoldProject(tempDir.path);
 
       final mainTest = File('${tempDir.path}/endevir_test/main_test.dart');
@@ -30,10 +30,29 @@ dependencies:
       // アプリのパッケージ名がimportに反映される
       expect(content, contains("import 'package:my_app/main.dart'"));
       expect(content, contains('endevirRunnerMain'));
-      expect(content, contains('endevirTest'));
+      // 登録は生成バンドル経由（CORE-104）
+      expect(content, contains('registerAllTests'));
+
+      final sample =
+          File('${tempDir.path}/endevir_test/app_smoke_test.dart');
+      expect(sample.existsSync(), isTrue);
+      expect(sample.readAsStringSync(), contains('endevirTest'));
+
+      // 初期バンドルも生成され、サンプルテストが登録される
+      final bundle =
+          File('${tempDir.path}/endevir_test/test_bundle.g.dart');
+      expect(bundle.existsSync(), isTrue);
+      expect(bundle.readAsStringSync(), contains('app_smoke_test'));
 
       expect(File('${tempDir.path}/endevir.yaml').existsSync(), isTrue);
-      expect(created, containsAll(['endevir_test/main_test.dart', 'endevir.yaml']));
+      expect(
+        created,
+        containsAll([
+          'endevir_test/main_test.dart',
+          'endevir_test/app_smoke_test.dart',
+          'endevir.yaml',
+        ]),
+      );
     });
 
     test('冪等: 既存ファイルは上書きしない（CLI-001）', () {

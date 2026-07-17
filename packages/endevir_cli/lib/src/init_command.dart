@@ -5,6 +5,8 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 
+import 'enumerate.dart';
+
 /// 雛形（endevir_test/main_test.dart, endevir.yaml）を生成する。
 /// 生成したファイルの相対パス一覧を返す（既存はスキップ）。
 List<String> scaffoldProject(String projectRoot) {
@@ -30,25 +32,44 @@ List<String> scaffoldProject(String projectRoot) {
   }
 
   write('endevir_test/main_test.dart', _mainTestTemplate(packageName));
+  write('endevir_test/app_smoke_test.dart', _smokeTestTemplate);
   write('endevir.yaml', _configTemplate);
+
+  // 初期バンドルを生成する（以後は `endevir test` が毎回再生成する）
+  writeBundle(enumerateTests('$projectRoot/endevir_test'));
   return created;
+}
+
+/// 列挙結果からtest_bundle.g.dartを書き出す（毎回上書き。生成物のため）。
+void writeBundle(EnumerationResult enumeration) {
+  File('${enumeration.testDir}/test_bundle.g.dart')
+      .writeAsStringSync(generateBundle(enumeration));
 }
 
 String _mainTestTemplate(String packageName) => '''
 import 'package:endevir/endevir.dart';
-import 'package:flutter/material.dart';
 import 'package:$packageName/main.dart';
 
+import 'test_bundle.g.dart';
+
 Future<void> main() => endevirRunnerMain(
-      registerTests: () {
-        endevirTest('アプリが起動する', (e) async {
-          // 最初の画面に表示されるテキスト等に置き換えてください
-          await e.expectVisible(MaterialApp);
-        });
-      },
+      // endevir_test/*_test.dart のテストは自動で登録されます（生成バンドル経由）
+      registerTests: registerAllTests,
       // アプリのルートWidgetに置き換えてください
       appBuilder: () => const MyApp(),
     );
+''';
+
+const _smokeTestTemplate = '''
+import 'package:endevir/endevir.dart';
+import 'package:flutter/material.dart';
+
+void main() {
+  endevirTest('アプリが起動する', (e) async {
+    // 最初の画面に表示されるテキスト等に置き換えてください
+    await e.expectVisible(MaterialApp);
+  });
+}
 ''';
 
 const _configTemplate = '''

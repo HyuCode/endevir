@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_print
+// （ログ相関テストでprint捕捉を検証するため）
+import 'package:endevir/src/runner/log_correlator.dart';
 import 'package:endevir/src/runner/test_registry.dart';
 import 'package:endevir/src/runner/test_runner.dart';
 import 'package:endevir/src/tester/endevir_tester.dart';
@@ -219,6 +222,85 @@ void main() {
 
       expect(ran, ['b']);
       expect(summary.total, 1);
+    });
+  });
+
+  group('ログ相関（RPT-002/405）', () {
+    late LogCorrelator correlator;
+
+    EndevirTestRunner correlatedRunner() {
+      correlator = LogCorrelator();
+      return EndevirTestRunner(
+        writer: writer,
+        testerFactory: (testId, attempt) => EndevirTester(
+          writer: writer,
+          testId: testId,
+          attempt: attempt,
+          logCorrelator: correlator,
+        ),
+        logCorrelator: correlator,
+      );
+    }
+
+    test('テスト本文のprintはsource=dartのLOGとしてtraceに記録される', () async {
+      registry.add('ログを出すテスト', (e) async {
+        print('こんにちはログ');
+      });
+
+      await correlatedRunner().run(registry, runId: 'r', platform: 'ios');
+
+      final logs =
+          parsed().where((e) => e.type == TraceEventType.LOG).toList();
+      expect(logs, hasLength(1));
+      expect(logs.single.source, LogSource.DART);
+      expect(logs.single.message, 'こんにちはログ');
+    });
+
+    test('step内のprintはそのstepIdに相関し、step外はstepIdなしになる', () async {
+      registry.add('相関テスト', (e) async {
+        print('ステップ外');
+        await e.step('手順A', () async {
+          print('手順Aの中');
+        });
+      });
+
+      await correlatedRunner().run(registry, runId: 'r', platform: 'ios');
+
+      final events = parsed();
+      final stepId = events
+          .firstWhere((e) => e.type == TraceEventType.STEP_START)
+          .stepId;
+      final logs =
+          events.where((e) => e.type == TraceEventType.LOG).toList();
+      expect(logs[0].message, 'ステップ外');
+      expect(logs[0].stepId, isNull);
+      expect(logs[1].message, '手順Aの中');
+      expect(logs[1].stepId, stepId);
+    });
+
+    test('ネストしたstepでは内側のstepIdに相関し、抜けると外側に戻る', () async {
+      registry.add('ネスト', (e) async {
+        await e.step('外側', () async {
+          await e.step('内側', () async {
+            print('内側ログ');
+          });
+          print('外側ログ');
+        });
+      });
+
+      await correlatedRunner().run(registry, runId: 'r', platform: 'ios');
+
+      final events = parsed();
+      final stepIds = events
+          .where((e) => e.type == TraceEventType.STEP_START)
+          .map((e) => e.stepId)
+          .toList(); // [外側, 内側]
+      final logs =
+          events.where((e) => e.type == TraceEventType.LOG).toList();
+      expect(logs[0].message, '内側ログ');
+      expect(logs[0].stepId, stepIds[1]);
+      expect(logs[1].message, '外側ログ');
+      expect(logs[1].stepId, stepIds[0]);
     });
   });
 }

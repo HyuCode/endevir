@@ -6,6 +6,7 @@ export 'src/evidence/evidence_recorder.dart';
 export 'src/finder/finder.dart';
 export 'src/interaction/navigation.dart';
 export 'src/interaction/pointer_synthesizer.dart';
+export 'src/runner/log_correlator.dart';
 export 'src/runner/runner_main.dart';
 export 'src/runner/test_registry.dart';
 export 'src/runner/test_runner.dart';

@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../agent/endevir_agent.dart';
 import '../evidence/evidence_recorder.dart';
 import '../interaction/navigation.dart';
+import 'log_correlator.dart';
 import '../tester/endevir_tester.dart';
 import 'test_registry.dart';
 import 'test_runner.dart';
@@ -38,6 +39,7 @@ Future<void> endevirRunnerMain({
     runTests: ({only, config, required onTraceLine, required onScreenshot}) async {
       final effective = config ?? const EndevirRunConfig();
       final writer = TraceWriter(onTraceLine);
+      final logCorrelator = LogCorrelator();
       final recorder = EvidenceRecorder(
         capturer: const DebugLayerFrameCapturer(),
         deliver: onScreenshot,
@@ -52,9 +54,11 @@ Future<void> endevirRunnerMain({
           stabilityFrames: effective.stabilityFrames,
           evidence: recorder,
           screenshotMode: effective.screenshotMode,
+          logCorrelator: logCorrelator,
         ),
         // テスト間の簡易状態リセット（強い分離はネイティブ写像側で行う）
         beforeEach: () async => popToRoot(),
+        logCorrelator: logCorrelator,
       );
       final summary = await runner.run(
         endevirRegistry,

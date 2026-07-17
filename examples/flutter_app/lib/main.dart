@@ -217,7 +217,9 @@ class _FormScreenState extends State<FormScreen> {
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
+      debugPrint('送信処理を開始: ${_emailController.text}');
       Future<void>.delayed(const Duration(seconds: 1), () {
+        debugPrint('送信処理が完了');
         if (mounted) setState(() => _submitted = true);
       });
     }

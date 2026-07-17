@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import '../evidence/evidence_recorder.dart';
 import '../finder/finder.dart';
 import '../interaction/pointer_synthesizer.dart';
+import '../runner/log_correlator.dart';
 import '../wait/frame_signal.dart';
 import '../wait/frame_waiter.dart';
 import '../wait/stability_tracker.dart';
@@ -24,11 +25,13 @@ class EndevirTester {
     EvidenceRecorder? evidence,
     this.screenshotMode = ScreenshotMode.onFailure,
     this.attempt = 1,
+    LogCorrelator? logCorrelator,
   })  : _writer = writer,
         _testId = testId,
         _waiter = FrameWaiter(frameSignal),
         _rootResolver = rootResolver ?? _defaultRoot,
-        _evidence = evidence;
+        _evidence = evidence,
+        _logCorrelator = logCorrelator;
 
   static Element _defaultRoot() => WidgetsBinding.instance.rootElement!;
 
@@ -38,6 +41,7 @@ class EndevirTester {
   final Element Function() _rootResolver;
   final PointerSynthesizer _pointer = PointerSynthesizer();
   final EvidenceRecorder? _evidence;
+  final LogCorrelator? _logCorrelator;
 
   /// スクリーンショットの記録プリセット（RPT-004）。
   final ScreenshotMode screenshotMode;
@@ -57,6 +61,7 @@ class EndevirTester {
   /// 記録する（GPUスナップショットのみ同期、エンコードは遅延。ADR-004）。
   Future<T> step<T>(String name, Future<T> Function() body) async {
     final stepId = _writer.stepStart(name, testId: _testId);
+    _logCorrelator?.pushStep(stepId);
     try {
       final result = await body();
       _writer.stepEnd(stepId, TraceStatus.PASSED,
@@ -67,6 +72,8 @@ class EndevirTester {
           error: '$e',
           screenshot: await _captureIf(passed: false, stepId: stepId));
       rethrow;
+    } finally {
+      _logCorrelator?.popStep();
     }
   }
 

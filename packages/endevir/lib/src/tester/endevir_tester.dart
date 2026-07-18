@@ -113,7 +113,7 @@ class EndevirTester {
   Future<WaitResult> expectVisible(Object target, {Duration? timeout}) {
     final finder = EndevirFinder.from(target);
     return _waiter.waitUntil(
-      () => _resolveVisible(finder).isNotEmpty,
+      () => _resolveSingleVisible(finder) != null,
       timeout: timeout ?? defaultTimeout,
       describe: 'visible: ${finder.describe()}',
     );
@@ -123,6 +123,34 @@ class EndevirTester {
       .resolve(_rootResolver())
       .where(_isActuallyVisible)
       .toList(growable: false);
+
+  Element? _resolveSingleVisible(EndevirFinder finder) {
+    final elements = _resolveVisible(finder);
+    if (elements.length > 1) {
+      throw AmbiguousFinderException(
+        finder.describe(),
+        elements.map(_describeCandidate).toList(growable: false),
+      );
+    }
+    return elements.firstOrNull;
+  }
+
+  String _describeCandidate(Element element) {
+    final widget = element.widget;
+    final key = widget.key;
+    final text = widget is Text ? widget.data : null;
+    final renderObject = element.renderObject;
+    final rect =
+        renderObject is RenderBox &&
+            renderObject.attached &&
+            renderObject.hasSize
+        ? renderObject.localToGlobal(Offset.zero) & renderObject.size
+        : null;
+    return '- ${widget.runtimeType}'
+        '${key == null ? '' : ' key=$key'}'
+        '${text == null ? '' : ' text="$text"'}'
+        '${rect == null ? '' : ' rect=$rect'}';
+  }
 
   bool _isActuallyVisible(Element element) {
     var hiddenByAncestor = false;
@@ -222,11 +250,11 @@ class EndevirElement {
       keepFramesFlowing: true,
     );
 
-    final elements = _tester._resolveVisible(_finder);
-    if (elements.isEmpty) {
+    final element = _tester._resolveSingleVisible(_finder);
+    if (element == null) {
       throw StateError('入力対象が表示されていません: ${_finder.describe()}');
     }
-    final editable = _findEditableText(elements.first);
+    final editable = _findEditableText(element);
     if (editable == null) {
       throw StateError('EditableTextが見つかりません: ${_finder.describe()}');
     }
@@ -256,9 +284,9 @@ class EndevirElement {
   }
 
   Offset? _currentCenter() {
-    final elements = _tester._resolveVisible(_finder);
-    if (elements.isEmpty) return null;
-    final renderObject = elements.first.renderObject;
+    final element = _tester._resolveSingleVisible(_finder);
+    if (element == null) return null;
+    final renderObject = element.renderObject;
     if (renderObject is! RenderBox || !renderObject.attached) return null;
     return renderObject.localToGlobal(renderObject.size.center(Offset.zero));
   }

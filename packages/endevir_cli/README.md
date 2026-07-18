@@ -54,6 +54,11 @@ Device preflight requires at least 1 GiB free in the iOS simulator data volume
 or Android `/data` volume. Endevir never boots or shuts down a device. Cleanup
 only stops an app and removes an adb forward after Endevir created them.
 
+`endevir init` is transactional around scaffold generation and `flutter pub
+add`. If dependency resolution or process startup fails, it restores the
+pubspec, lockfile, generated pub metadata, and pre-existing test bundle, then
+removes files and directories created by the failed attempt.
+
 For Android, pass an adb serial instead:
 
 ```console

@@ -7,7 +7,6 @@ import 'package:flutter/material.dart'
         Checkbox,
         FloatingActionButton,
         IconButton,
-        InkResponse,
         Slider,
         Switch,
         TextField;
@@ -244,14 +243,6 @@ class EndevirTester {
       if (widget is ButtonStyleButton) return widget.enabled;
       if (widget is IconButton) return widget.onPressed != null;
       if (widget is FloatingActionButton) return widget.onPressed != null;
-      if (widget is InkResponse) {
-        return widget.onTap != null ||
-            widget.onTapDown != null ||
-            widget.onTapUp != null ||
-            widget.onDoubleTap != null ||
-            widget.onLongPress != null ||
-            widget.onLongPressUp != null;
-      }
       if (widget is Switch) return widget.onChanged != null;
       if (widget is Checkbox) return widget.onChanged != null;
       if (widget is Slider) return widget.onChanged != null;

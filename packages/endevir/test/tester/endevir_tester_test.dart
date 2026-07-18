@@ -144,6 +144,115 @@ void main() {
     expect(find.text('カウント: 1'), findsOneWidget);
   });
 
+  testWidgets('clip領域外の対象はtapしない', (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 100,
+            height: 100,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned(
+                  left: 150,
+                  child: GestureDetector(
+                    key: const ValueKey('clipped'),
+                    onTap: () => tapped = true,
+                    child: const SizedBox(width: 40, height: 40),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    final expectation = expectLater(
+      e.$(#clipped).tap(timeout: const Duration(milliseconds: 50)),
+      throwsA(isA<WaitTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
+    expect(tapped, isFalse);
+  });
+
+  testWidgets('overlayに遮蔽された対象はtapしない', (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Stack(
+          children: [
+            GestureDetector(
+              key: const ValueKey('covered'),
+              onTap: () => tapped = true,
+              child: const SizedBox(width: 100, height: 100),
+            ),
+            const AbsorbPointer(child: SizedBox(width: 100, height: 100)),
+          ],
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    final expectation = expectLater(
+      e.$(#covered).tap(timeout: const Duration(milliseconds: 50)),
+      throwsA(isA<WaitTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
+    expect(tapped, isFalse);
+  });
+
+  testWidgets('disabledなボタンはtapしない', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ElevatedButton(
+          key: ValueKey('disabled'),
+          onPressed: null,
+          child: Text('無効'),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    final expectation = expectLater(
+      e.$(#disabled).tap(timeout: const Duration(milliseconds: 50)),
+      throwsA(isA<WaitTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
+  });
+
+  testWidgets('Opacityが0の対象はtapしない', (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Opacity(
+          opacity: 0,
+          child: GestureDetector(
+            key: const ValueKey('transparent'),
+            onTap: () => tapped = true,
+            child: const SizedBox(width: 100, height: 100),
+          ),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    final expectation = expectLater(
+      e.$(#transparent).tap(timeout: const Duration(milliseconds: 50)),
+      throwsA(isA<WaitTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
+    expect(tapped, isFalse);
+  });
+
   testWidgets(r'$(...).enterText()はTextFieldに入力できる（本番モード原型）', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: _FormScreen()));
     final e = makeTester(tester);
@@ -157,6 +266,27 @@ void main() {
 
     expect(done, isTrue);
     expect(find.text('user@example.com'), findsOneWidget);
+  });
+
+  testWidgets('disabledなTextFieldには入力しない', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: TextField(key: ValueKey('disabled_input'), enabled: false),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    final expectation = expectLater(
+      e
+          .$(#disabled_input)
+          .enterText('blocked', timeout: const Duration(milliseconds: 50)),
+      throwsA(isA<WaitTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
+    expect(find.text('blocked'), findsNothing);
   });
 
   testWidgets(r'$記法のチェーンでスコープを絞って操作できる', (tester) async {

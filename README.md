@@ -44,7 +44,6 @@ $ dart run endevir_cli:endevir_cli test -p ios -d <simulator-udid>
 | `packages/endevir_reporter` | traceスキーマ型・TraceWriter・HTMLレポート（pure Dart）                                                                                                                                 |
 | `packages/endevir_cli`      | init・doctor・test・develop・Android instrumentation CLI                                                                                                                                |
 | `examples/flutter_app`      | 検証用アプリ（M0スパイクの成果物を含む）                                                                                                                                                |
-| `apps/cloud`                | Endevir Cloud公式サイトと将来のクラウドダッシュボード（Next.js）                                                                                                                        |
 | `schema/`                   | trace/プロトコルのJSON Schema（単一の真実、`pnpm codegen` で型生成）                                                                                                                    |
 | `docs/`                     | [調査](docs/01-reports/README.md) / [要件定義](docs/02-spec/README.md) / [計画](docs/03-plan/01-mvp-plan.md) / [ADR](docs/04-adr/README.md) / [設計](docs/05-design/01-trace-schema.md) |
 
@@ -60,14 +59,15 @@ fvm flutter analyze packages examples
 (cd packages/endevir_cli && fvm dart test)
 pnpm install && pnpm lint:md && pnpm format:check
 pnpm codegen              # スキーマから型を再生成
-pnpm --filter endevir-cloud build
 ```
 
 原則TDD（[要件定義 §11.1](docs/02-spec/01-overview.md)）。技術決定は[ADR](docs/04-adr/README.md)に記録する。
 
+## 関連リポジトリ
+
+Endevir Cloudの公式サイト・ダッシュボード・実行基盤は、非公開の
+`HyuCode/endevir-cloud` で開発しています。
+
 ## ライセンス
 
-- `packages/` を含むOSS部分: Apache License 2.0
-- `apps/cloud`: proprietary / All Rights Reserved
-
-詳細な適用範囲は[LICENSE](LICENSE)を参照してください。
+Apache License 2.0。詳細は[LICENSE](LICENSE)を参照してください。

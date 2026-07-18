@@ -1,4 +1,5 @@
 import 'package:endevir/src/evidence/evidence_recorder.dart';
+import 'package:endevir/src/finder/finder.dart';
 import 'package:endevir/src/tester/endevir_tester.dart';
 import 'package:endevir/src/wait/wait_exception.dart';
 import 'package:endevir_reporter/endevir_reporter.dart';
@@ -100,6 +101,30 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 100));
     await expectation;
+  });
+
+  testWidgets('完全一致する表示要素が複数ある場合は候補つきで失敗する', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Column(
+          children: [
+            Text('重複', key: ValueKey('first')),
+            Text('重複', key: ValueKey('second')),
+          ],
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    expect(
+      () => e.expectVisible('重複'),
+      throwsA(
+        isA<AmbiguousFinderException>()
+            .having((error) => error.candidates, 'candidates', hasLength(2))
+            .having((error) => '$error', 'message', contains('first'))
+            .having((error) => '$error', 'message', contains('second')),
+      ),
+    );
   });
 
   testWidgets(r'$(...).tap()は位置安定を待ってからタップする', (tester) async {

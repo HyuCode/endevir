@@ -7,10 +7,16 @@ void main() {
 
   group('EndevirFinder.from', () {
     testWidgets('Symbol（#記法）はValueKey<String>で要素を特定する', (tester) async {
-      await tester.pumpWidget(app(Column(children: const [
-        Text('hello', key: ValueKey('greeting')),
-        Text('world'),
-      ])));
+      await tester.pumpWidget(
+        app(
+          Column(
+            children: const [
+              Text('hello', key: ValueKey('greeting')),
+              Text('world'),
+            ],
+          ),
+        ),
+      );
 
       final finder = EndevirFinder.from(#greeting);
       final elements = finder.resolve(tester.binding.rootElement!);
@@ -19,24 +25,40 @@ void main() {
       expect((elements.single.widget as Text).data, 'hello');
     });
 
-    testWidgets('Stringは部分一致でTextウィジェットを特定する', (tester) async {
-      await tester.pumpWidget(app(Column(children: const [
-        Text('カウント: 0'),
-        Text('その他'),
-      ])));
+    testWidgets('Stringは完全一致でTextウィジェットを特定する', (tester) async {
+      await tester.pumpWidget(
+        app(const Column(children: [Text('カウント'), Text('カウント: 0')])),
+      );
 
       final finder = EndevirFinder.from('カウント');
       final elements = finder.resolve(tester.binding.rootElement!);
 
       expect(elements, hasLength(1));
-      expect((elements.single.widget as Text).data, 'カウント: 0');
+      expect((elements.single.widget as Text).data, 'カウント');
+    });
+
+    testWidgets('部分一致はtextContainsで明示する', (tester) async {
+      await tester.pumpWidget(
+        app(const Column(children: [Text('カウント'), Text('カウント: 0')])),
+      );
+
+      final finder = EndevirFinder.textContains('カウント');
+      final elements = finder.resolve(tester.binding.rootElement!);
+
+      expect(elements, hasLength(2));
     });
 
     testWidgets('KeyオブジェクトとWidget型でも特定できる', (tester) async {
-      await tester.pumpWidget(app(Column(children: const [
-        TextField(key: Key('email')),
-        Text('label'),
-      ])));
+      await tester.pumpWidget(
+        app(
+          Column(
+            children: const [
+              TextField(key: Key('email')),
+              Text('label'),
+            ],
+          ),
+        ),
+      );
 
       final root = tester.binding.rootElement!;
       expect(
@@ -61,10 +83,9 @@ void main() {
     });
 
     testWidgets('RegExpはテキストを正規表現で特定する', (tester) async {
-      await tester.pumpWidget(app(Column(children: const [
-        Text('カウント: 42'),
-        Text('カウント: xx'),
-      ])));
+      await tester.pumpWidget(
+        app(Column(children: const [Text('カウント: 42'), Text('カウント: xx')])),
+      );
 
       final finder = EndevirFinder.from(RegExp(r'カウント: \d+'));
       final elements = finder.resolve(tester.binding.rootElement!);
@@ -74,10 +95,16 @@ void main() {
     });
 
     testWidgets('semanticsLabelはSemanticsウィジェットのラベルで特定する', (tester) async {
-      await tester.pumpWidget(app(Column(children: [
-        Semantics(label: '閉じるボタン', child: const Icon(Icons.close)),
-        const Icon(Icons.add),
-      ])));
+      await tester.pumpWidget(
+        app(
+          Column(
+            children: [
+              Semantics(label: '閉じるボタン', child: const Icon(Icons.close)),
+              const Icon(Icons.add),
+            ],
+          ),
+        ),
+      );
 
       final finder = EndevirFinder.semanticsLabel('閉じるボタン');
       final elements = finder.resolve(tester.binding.rootElement!);
@@ -86,10 +113,16 @@ void main() {
     });
 
     testWidgets('チェーン（スコープ絞り込み）は親の配下だけを検索する', (tester) async {
-      await tester.pumpWidget(app(Column(children: const [
-        Column(key: ValueKey('section_a'), children: [Text('項目')]),
-        Column(key: ValueKey('section_b'), children: [Text('項目')]),
-      ])));
+      await tester.pumpWidget(
+        app(
+          Column(
+            children: const [
+              Column(key: ValueKey('section_a'), children: [Text('項目')]),
+              Column(key: ValueKey('section_b'), children: [Text('項目')]),
+            ],
+          ),
+        ),
+      );
 
       final scoped = EndevirFinder.descendant(
         of: EndevirFinder.from(#section_a),

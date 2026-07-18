@@ -11,7 +11,7 @@ abstract class EndevirFinder {
   ///
   /// - [Symbol]（`#emailField`記法）: `ValueKey<String>` として解決
   /// - [Key]: ウィジェットキー
-  /// - [String]: Textウィジェットの部分一致
+  /// - [String]: Textウィジェットの完全一致
   /// - [RegExp]: Textウィジェットの正規表現一致
   /// - [Type]: ウィジェット型
   /// - [EndevirFinder]: そのまま返す
@@ -24,16 +24,18 @@ abstract class EndevirFinder {
       final RegExp pattern => TextRegExpFinder(pattern),
       final Type type => TypeFinder(type),
       _ => throw ArgumentError.value(
-          target,
-          'target',
-          'Symbol / Key / String / RegExp / Type / EndevirFinder のいずれかを指定してください',
-        ),
+        target,
+        'target',
+        'Symbol / Key / String / RegExp / Type / EndevirFinder のいずれかを指定してください',
+      ),
     };
   }
 
   /// Semanticsウィジェットのラベルで特定するファインダー。
-  factory EndevirFinder.semanticsLabel(String label) =
-      SemanticsLabelFinder;
+  factory EndevirFinder.semanticsLabel(String label) = SemanticsLabelFinder;
+
+  /// Textウィジェットを部分一致で特定する。
+  factory EndevirFinder.textContains(String text) = TextContainsFinder;
 
   /// [of]の配下から[matching]を検索するスコープつきファインダー（チェーン）。
   factory EndevirFinder.descendant({
@@ -79,9 +81,25 @@ class KeyFinder extends EndevirFinder {
   String describe() => 'key: $key';
 }
 
-/// Textウィジェットの部分一致ファインダー。
+/// Textウィジェットの完全一致ファインダー。
 class TextFinder extends EndevirFinder {
   const TextFinder(this.text);
+
+  final String text;
+
+  @override
+  bool matches(Element element) {
+    final widget = element.widget;
+    return widget is Text && widget.data == text;
+  }
+
+  @override
+  String describe() => 'text: "$text"';
+}
+
+/// Textウィジェットの明示的な部分一致ファインダー。
+class TextContainsFinder extends EndevirFinder {
+  const TextContainsFinder(this.text);
 
   final String text;
 
@@ -92,7 +110,20 @@ class TextFinder extends EndevirFinder {
   }
 
   @override
-  String describe() => 'text: "$text"';
+  String describe() => 'text containing: "$text"';
+}
+
+/// 1件を要求する操作で複数の表示要素が見つかった。
+class AmbiguousFinderException implements Exception {
+  const AmbiguousFinderException(this.description, this.candidates);
+
+  final String description;
+  final List<String> candidates;
+
+  @override
+  String toString() =>
+      'AmbiguousFinderException: $description matched '
+      '${candidates.length} visible elements:\n${candidates.join('\n')}';
 }
 
 /// Textウィジェットの正規表現一致ファインダー。

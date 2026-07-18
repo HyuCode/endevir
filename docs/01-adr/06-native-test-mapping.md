@@ -2,13 +2,13 @@
 
 - 日付: 2026-07-17
 - ステータス: Accepted
-- 関連: CORE-109、S6スパイク、[Kotlinテスト](../../examples/flutter_app/android/app/src/androidTest/kotlin/dev/endevir/example_app/EndevirNativeMappingTest.kt) / [エントリポイント](../../examples/flutter_app/endevir_test/main_s6_native.dart)、[[02-agent-transport]]、[[05-static-test-enumeration]]
+- 関連: [ADR-002](./02-agent-transport.md)、[ADR-005](./05-static-test-enumeration.md)
 
 ## 背景・課題
 
-ネイティブテスト写像（1 Dartテスト=1ネイティブテストケース、CORE-109)は、既存デバイスファーム・シャーディング・リトライ基盤に乗るための鍵。PatrolはJUnitランナーが起動時にDart側へテスト階層を問い合わせる（ドライラン同期）が、ADR-005の静的列挙によりこの同期を廃した、より単純な構造が成立するかを検証した。
+ネイティブテスト写像（1 Dartテスト=1ネイティブテストケース）は、既存デバイスファーム・シャーディング・リトライ基盤に乗るための鍵になる。ADR-005の静的列挙により実行時のドライラン同期を廃した、より単純な構造が成立するかを検証した。
 
-## 検証結果（S6スパイク、Androidエミュレータ / connectedDebugAndroidTest）
+## 検証結果（Androidエミュレータ / connectedDebugAndroidTest）
 
 構造: ビルド時マニフェスト（androidTest assets）→ Parameterized JUnitがテストケースを生成 → 各ケースがアプリ内エージェント（ADR-002）の `/runTest?name=` を呼び、Dartテストが実UIを操作 → 結果がJUnitに返る。
 
@@ -25,9 +25,9 @@
 - Android写像は「**静的マニフェスト（ADR-005）→ Parameterized JUnit → エージェント `/runTest`（ADR-002）**」の構造で実装する
 - テスト実行APKは生成コード（マニフェスト・バンドル）とともに `endevir_cli` がビルドする。`-Ptarget` でエントリポイントを注入する（FTL持ち込みと同じ流儀）
 
-## スパイクで得た副次的発見（endevir doctor / CLI設計への入力）
+## `endevir doctor` / CLI設計への入力
 
-実環境の落とし穴が4つ見つかった。いずれも「Patrolのセットアップが複雑」の正体の一部であり、`endevir init/doctor`（CLI-001/002）が自動処理すべき項目。
+実環境で見つかった次の4項目は、`endevir init/doctor` が自動処理または診断する。
 
 1. **JDKバージョン**: ホストのJAVA_HOME（Java 25）でgradleを直接叩くとKotlinコンパイラが落ちる。Flutterが設定するJDK（この環境ではJava 17）をCLIが検出してgradle実行に引き回す必要がある
 2. **androidx.testのバージョン制約**: Flutterのdebug embeddingが `androidx.test:runner:1.2.0` を strictly で持ち込み、新しいandroidx.testと衝突する（AGPのconsistent resolution）。バージョンを合わせる必要がある
@@ -36,13 +36,11 @@
 
 ## 制約・未検証
 
-- iOS（XCUITest）写像は同じ構造の適用可能性が高いが未検証（P1）
-- ~~Firebase Test Labでの実行はM6で確認する~~ → **確認済み（2026-07-17）**: MediumPhone.arm / Android 13で5テストケースすべてパス。注意: app APKは必ずテストエントリポイント（エージェント入り）でビルドすること（`endevir native android --build` が正しい組み合わせを生成する）
-- スパイクのHTTP/1.1手書きクライアントはchunked encodingを正しく処理していない（本実装はADR-002のWebSocket+JSON-RPCに置き換わるため問題にしない）
-- テストごとのアプリ再起動は分離性と引き換えに時間コストがある（5テスト24秒）。「再起動あり/なし」を選択可能にする設計をM1で検討
+- iOS（XCUITest）写像は同じ構造の適用可能性が高いが未検証
+- Firebase Test Labでは確認済み（2026-07-17）: MediumPhone.arm / Android 13で5テストケースすべてパス。app APKは必ずテストエントリポイント（エージェント入り）でビルドすること（`endevir native android --build` が正しい組み合わせを生成する）
+- テストごとのアプリ再起動は分離性と引き換えに時間コストがある（5テスト24秒）
 
 ## 影響
 
-- CORE-109（Android）の実装方式が確定し、M0の全スパイクが完了
 - `endevir doctor` の診断項目リストに上記4つの落とし穴を登録する
-- 見直しトリガー: FTL実行（M6）で instrumentation の挙動が異なる場合
+- 見直しトリガー: デバイスファームでinstrumentationの挙動が異なる場合

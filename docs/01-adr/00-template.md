@@ -2,7 +2,7 @@
 
 - 日付: YYYY-MM-DD
 - ステータス: Proposed | Accepted | Rejected | Superseded by ADR-XXX
-- 関連: 要件ID（例: CORE-102）、スパイク番号（例: S3）、関連ADR
+- 関連: 関連する公開Issue、Pull Request、ADR
 
 ## 背景・課題
 
@@ -14,7 +14,7 @@
 
 - 概要
 - 長所 / 短所
-- 検証結果（スパイクの計測値があれば必ず記載）
+- 検証結果（計測値があれば記載）
 
 ### 案B: 名称
 

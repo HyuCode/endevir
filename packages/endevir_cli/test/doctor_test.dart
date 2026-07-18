@@ -54,19 +54,46 @@ dependencies:
     });
   });
 
-  group('JDKチェック（S6の落とし穴、ADR-006）', () {
-    test('Java 21以下はok、22以上はwarnになる', () {
-      expect(checkJavaVersion('openjdk version "17.0.18"').status,
-          DoctorStatus.ok);
-      expect(checkJavaVersion('openjdk version "21.0.2"').status,
-          DoctorStatus.ok);
-      final warned = checkJavaVersion('openjdk version "25.0.2"');
-      expect(warned.status, DoctorStatus.warn);
-      expect(warned.fixHint, isNotNull);
+  group('Flutter JDKチェック（S6の落とし穴、ADR-006）', () {
+    String doctorOutput(int major, String binary) => '''
+[✓] Android toolchain - develop for Android devices
+    • Java binary at: $binary
+      This JDK is specified in your Flutter configuration.
+    • Java version OpenJDK Runtime Environment (build $major.0.2+1)
+''';
+
+    test('flutter doctorから実際のJava binaryとversionを抽出する', () {
+      final info = parseFlutterJava(
+        doctorOutput(17, '/opt/homebrew/opt/openjdk@17/bin/java'),
+      );
+
+      expect(info, isNotNull);
+      expect(info!.major, 17);
+      expect(info.binary, '/opt/homebrew/opt/openjdk@17/bin/java');
+      expect(info.version, contains('17.0.2'));
     });
 
-    test('javaが見つからない場合はwarn（Android開発をしないなら問題ない）', () {
-      expect(checkJavaVersion(null).status, DoctorStatus.warn);
+    test('Java 17〜21はokになる', () {
+      expect(checkFlutterJava(doctorOutput(17, '/jdk17/bin/java')).status,
+          DoctorStatus.ok);
+      expect(checkFlutterJava(doctorOutput(21, '/jdk21/bin/java')).status,
+          DoctorStatus.ok);
+    });
+
+    test('Java 17未満と22以上はwarnになり設定コマンドを提示する', () {
+      for (final major in [11, 22, 26]) {
+        final warned =
+            checkFlutterJava(doctorOutput(major, '/jdk$major/bin/java'));
+        expect(warned.status, DoctorStatus.warn, reason: 'Java $major');
+        expect(warned.message, contains('/jdk$major/bin/java'));
+        expect(warned.fixHint, contains('flutter config --jdk-dir'));
+      }
+    });
+
+    test('Flutterが使用するJavaを特定できない場合はwarnになる', () {
+      expect(checkFlutterJava(null).status, DoctorStatus.warn);
+      expect(checkFlutterJava('[!] Android toolchain unavailable').status,
+          DoctorStatus.warn);
     });
   });
 

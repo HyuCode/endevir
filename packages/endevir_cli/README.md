@@ -44,6 +44,8 @@ endevir test -p ios -d <simulator-udid>
 `endevir doctor` exits successfully when it finds only optional warnings and
 prints `doctor status: WARNING`. Use `endevir doctor --strict` in CI to return
 exit code 2 when any warning is present. Diagnostic errors always return 1.
+The JDK check reads the Java binary selected by `flutter doctor -v`, not the
+potentially different `java` found on the shell `PATH`.
 
 `endevir test` uses distinct infrastructure exit codes after a successful
 build: 71 for install failure, 72 for launch failure, and 73 when the agent

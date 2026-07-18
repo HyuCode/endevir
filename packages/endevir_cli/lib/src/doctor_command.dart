@@ -31,6 +31,18 @@ class DoctorResult {
   }
 }
 
+class FlutterJavaInfo {
+  const FlutterJavaInfo({
+    required this.binary,
+    required this.version,
+    required this.major,
+  });
+
+  final String binary;
+  final String version;
+  final int major;
+}
+
 class DoctorSummary {
   DoctorSummary(Iterable<DoctorResult> results)
       : okCount = results.where((r) => r.status == DoctorStatus.ok).length,
@@ -106,26 +118,55 @@ List<DoctorResult> runProjectChecks(String projectRoot) {
   return results;
 }
 
-/// JDKバージョンのチェック（ADR-006の落とし穴1: 新しすぎるJDKでgradleが落ちる）。
-/// [javaVersionOutput]は `java -version` の出力（javaがなければnull）。
-DoctorResult checkJavaVersion(String? javaVersionOutput) {
-  if (javaVersionOutput == null) {
-    return const DoctorResult('JDK', DoctorStatus.warn, 'javaが見つかりません',
-        fixHint: 'Androidでテストする場合はJDK 17〜21を用意してください');
+/// Extracts the Java selected by Flutter for Android/Gradle. This deliberately
+/// does not inspect shell `java`, which may differ from Flutter configuration.
+FlutterJavaInfo? parseFlutterJava(String flutterDoctorOutput) {
+  final binary = RegExp(r'Java binary at:\s*(.+)')
+      .firstMatch(flutterDoctorOutput)
+      ?.group(1)
+      ?.trim();
+  final version = RegExp(r'Java version\s+(.+)')
+      .firstMatch(flutterDoctorOutput)
+      ?.group(1)
+      ?.trim();
+  final major = version == null
+      ? null
+      : int.tryParse(
+          RegExp(r'\(build\s+(\d+)').firstMatch(version)?.group(1) ?? '');
+  if (binary == null || binary.isEmpty || version == null || major == null) {
+    return null;
   }
-  final match =
-      RegExp(r'version "(\d+)').firstMatch(javaVersionOutput);
-  final major = int.tryParse(match?.group(1) ?? '');
-  if (major == null) {
+  return FlutterJavaInfo(binary: binary, version: version, major: major);
+}
+
+/// JDK compatibility check based on `flutter doctor -v`, which reports the
+/// Java binary Flutter actually passes to Android tooling.
+DoctorResult checkFlutterJava(String? flutterDoctorOutput) {
+  final info = flutterDoctorOutput == null
+      ? null
+      : parseFlutterJava(flutterDoctorOutput);
+  if (info == null) {
+    return const DoctorResult(
+      'Flutter JDK',
+      DoctorStatus.warn,
+      'Flutterが使用するJavaを特定できません',
+      fixHint: '`flutter doctor -v` のAndroid toolchainを確認してください',
+    );
+  }
+  if (info.major < 17 || info.major > 21) {
     return DoctorResult(
-        'JDK', DoctorStatus.warn, '不明なjavaバージョン: $javaVersionOutput');
+      'Flutter JDK',
+      DoctorStatus.warn,
+      'Java ${info.major} はAndroid Gradle/Kotlinビルドと非互換の可能性があります '
+          '(${info.binary})',
+      fixHint: '`flutter config --jdk-dir=<JDK 17〜21のパス>` を実行してください',
+    );
   }
-  if (major > 21) {
-    return DoctorResult('JDK', DoctorStatus.warn,
-        'Java $major はAndroid Gradle/Kotlinビルドと非互換の可能性があります',
-        fixHint: 'JDK 17〜21を使用してください（例: JAVA_HOME=/opt/homebrew/opt/openjdk@17）');
-  }
-  return DoctorResult('JDK', DoctorStatus.ok, 'Java $major');
+  return DoctorResult(
+    'Flutter JDK',
+    DoctorStatus.ok,
+    'Java ${info.major} (${info.binary})',
+  );
 }
 
 Future<int> runDoctorCommand(List<String> args) async {
@@ -145,7 +186,7 @@ Future<int> runDoctorCommand(List<String> args) async {
   // ツールチェーン検査
   results.add(await _checkCommand(
       'Flutter SDK', flutterExecutable(), [...flutterArgPrefix(), '--version']));
-  results.add(checkJavaVersion(await _javaVersion()));
+  results.add(checkFlutterJava(await _flutterDoctorOutput()));
   if (Platform.isMacOS) {
     results.add(await _checkCommand('Xcodeツール', 'xcrun', ['--version']));
   }
@@ -186,11 +227,13 @@ Future<DoctorResult> _checkCommand(
   }
 }
 
-Future<String?> _javaVersion() async {
+Future<String?> _flutterDoctorOutput() async {
   try {
-    final result = await Process.run('java', ['-version']);
-    // java -versionはstderrに出力される
-    return '${result.stderr}${result.stdout}';
+    final result = await Process.run(
+      flutterExecutable(),
+      [...flutterArgPrefix(), 'doctor', '-v'],
+    );
+    return '${result.stdout}${result.stderr}';
   } on ProcessException {
     return null;
   }

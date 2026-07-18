@@ -90,9 +90,9 @@ void main() {
               describe: 'text: ログイン',
             )
             .catchError((Object e) {
-          error = e;
-          return const WaitResult(Duration.zero, 0);
-        });
+              error = e;
+              return const WaitResult(Duration.zero, 0);
+            });
 
         signal.tick(); // 1フレームだけ流す
         async.elapse(const Duration(seconds: 3));
@@ -176,6 +176,29 @@ void main() {
 
         expect(evaluations, countAtTimeout);
       });
+    });
+  });
+
+  group('FrameWaiter.waitForFrames', () {
+    test('指定数のフレーム終端後に完了する', () async {
+      final signal = ManualFrameSignal();
+      final waiter = FrameWaiter(signal);
+      var done = false;
+
+      waiter.waitForFrames(2).then((_) => done = true);
+      expect(done, isFalse);
+      signal.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(done, isFalse);
+      signal.tick();
+      await Future<void>.delayed(Duration.zero);
+      expect(done, isTrue);
+    });
+
+    test('0フレームは即完了する', () async {
+      final waiter = FrameWaiter(ManualFrameSignal());
+      final result = await waiter.waitForFrames(0);
+      expect(result.evaluations, 0);
     });
   });
 }

@@ -13,6 +13,31 @@ class FrameWaiter {
 
   final FrameSignal _signal;
 
+  /// 指定数のフレーム終端を待つ。
+  ///
+  /// action直後の状態更新を次の操作・検証から観測可能にするために使う。
+  Future<WaitResult> waitForFrames(
+    int count, {
+    Duration timeout = const Duration(seconds: 10),
+    String describe = 'frame settle',
+  }) {
+    if (count < 0) {
+      throw ArgumentError.value(count, 'count', '0以上を指定してください');
+    }
+    if (count == 0) {
+      return Future.value(WaitResult(Duration.zero, 0));
+    }
+
+    // waitUntilは登録時にも一度評価するため、その1回をフレーム数に含めない。
+    var evaluationsRemaining = count + 1;
+    return waitUntil(
+      () => --evaluationsRemaining <= 0,
+      timeout: timeout,
+      describe: describe,
+      keepFramesFlowing: true,
+    );
+  }
+
   /// [condition]が真になるまでフレーム終端で再評価して待つ。
   ///
   /// [timeout]を超えると[WaitTimeoutException]（[describe]と評価回数つき）で

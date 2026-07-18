@@ -14,6 +14,7 @@ import 'device_preflight.dart';
 import 'enumerate.dart';
 import 'flutter_cli.dart';
 import 'init_command.dart' show writeBundle;
+import 'stage_retry.dart';
 
 const _agentPort = 8808;
 
@@ -86,11 +87,27 @@ Future<int> runTestCommand(List<String> args) async {
       return 1;
     }
 
-    print('[endevir] install & launch');
-    await launcher.installAndLaunch();
+    print('[endevir] install');
+    await runCliStage<void>(
+      stage: CliStage.install,
+      operation: launcher.install,
+      retryIf: (error) => error is ProcessException,
+      onRetry: _printStageRetry,
+    );
+
+    print('[endevir] launch');
+    await runCliStage<void>(
+      stage: CliStage.launch,
+      operation: launcher.launch,
+      retryIf: (error) => error is ProcessException,
+      onRetry: _printStageRetry,
+    );
 
     print('[endevir] connect to agent');
-    final socket = await connectToAgent(host: launcher.agentHost);
+    final socket = await connectToAgent(
+      host: launcher.agentHost,
+      onRetry: _printStageRetry,
+    );
     try {
       return await runAndCollect(
         socket,
@@ -101,8 +118,25 @@ Future<int> runTestCommand(List<String> args) async {
     } finally {
       await socket.close();
     }
+  } on CliStageException catch (error) {
+    stderr.writeln('[endevir] $error');
+    return error.exitCode;
   } finally {
     await launcher.terminate();
+  }
+}
+
+void _printStageRetry(
+  CliStage stage,
+  int failedAttempt,
+  int maxAttempts,
+  Object error,
+) {
+  // Agent startup can take many polls. Log the first and every tenth failure;
+  // install/launch retries always fit this condition through their first try.
+  if (failedAttempt == 1 || failedAttempt % 10 == 0) {
+    stderr.writeln('[endevir] ${stage.label} attempt $failedAttempt/'
+        '$maxAttempts failed; retrying: $error');
   }
 }
 
@@ -122,16 +156,24 @@ Future<bool> _runPreflight(
 }
 
 /// エージェントへの接続（リトライつき）。develop/testコマンドから共用する。
-Future<WebSocket> connectToAgent({String host = 'localhost'}) async {
-  for (var attempt = 0; attempt < 60; attempt++) {
-    try {
-      return await WebSocket.connect('ws://$host:$_agentPort/ws');
-    } catch (_) {
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
-  }
-  throw StateError('agent not reachable on $host:$_agentPort');
-}
+Future<WebSocket> connectToAgent({
+  String host = 'localhost',
+  int maxAttempts = 60,
+  Duration retryDelay = const Duration(milliseconds: 500),
+  Future<WebSocket> Function(String url)? connector,
+  RetryDelay delay = Future<void>.delayed,
+  RetryListener? onRetry,
+}) =>
+    runCliStage<WebSocket>(
+      stage: CliStage.agentConnect,
+      operation: () =>
+          (connector ?? WebSocket.connect)('ws://$host:$_agentPort/ws'),
+      retryIf: (_) => true,
+      maxAttempts: maxAttempts,
+      retryDelay: retryDelay,
+      delay: delay,
+      onRetry: onRetry,
+    );
 
 Future<int> runAndCollect(
   WebSocket socket, {
@@ -238,7 +280,8 @@ Future<ProcessResult> _run(String executable, List<String> args,
 
 abstract class _Launcher {
   Future<void> build(String target);
-  Future<void> installAndLaunch();
+  Future<void> install();
+  Future<void> launch();
   Future<void> terminate();
 
   /// エージェントへの到達ホスト（ポートフォワード込み）。
@@ -257,13 +300,17 @@ class _IosSimulatorLauncher extends _Launcher {
       _flutter(['build', 'ios', '--simulator', '--debug', '-t', target]);
 
   @override
-  Future<void> installAndLaunch() async {
+  Future<void> install() async {
     final plist = await _run('/usr/libexec/PlistBuddy',
         ['-c', 'Print CFBundleIdentifier', '$_appPath/Info.plist']);
     _bundleId = (plist.stdout as String).trim();
 
     await _run('xcrun', ['simctl', 'bootstatus', udid, '-b']);
     await _run('xcrun', ['simctl', 'install', udid, _appPath]);
+  }
+
+  @override
+  Future<void> launch() async {
     await _run('xcrun', ['simctl', 'terminate', udid, _bundleId!],
         check: false);
     await _run('xcrun', ['simctl', 'launch', udid, _bundleId!]);
@@ -290,9 +337,13 @@ class _AndroidLauncher extends _Launcher {
       _flutter(['build', 'apk', '--debug', '-t', target]);
 
   @override
-  Future<void> installAndLaunch() async {
+  Future<void> install() async {
     _packageName = _readApplicationId();
     await _run('adb', ['-s', serial, 'install', '-r', _apkPath]);
+  }
+
+  @override
+  Future<void> launch() async {
     await _run('adb', ['-s', serial, 'shell', 'am', 'force-stop', _packageName!],
         check: false);
     await _run('adb', [

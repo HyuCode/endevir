@@ -38,14 +38,14 @@ $ dart run endevir_cli:endevir_cli test -p ios -d <simulator-udid>
 
 ## モノレポ構成
 
-| パス                        | 内容                                                                                                                                                                                       |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/endevir`          | テスト記述API・ランナー・待機・アプリ内エージェント（Flutter）                                                                                                                             |
-| `packages/endevir_reporter` | traceスキーマ型・TraceWriter・HTMLレポート（pure Dart）                                                                                                                                    |
-| `packages/endevir_cli`      | init・doctor・test・develop・Android instrumentation CLI                                                                                                                                   |
-| `examples/flutter_app`      | 検証用アプリ（M0スパイクの成果物を含む）                                                                                                                                                   |
-| `schema/`                   | trace/プロトコルのJSON Schema（単一の真実、`pnpm codegen` で型生成）                                                                                                                       |
-| `docs/`                     | [Cloud連携契約](docs/02-spec/07-cloud-integration.md) / [ADR](docs/04-adr/README.md) / [設計](docs/05-design/01-trace-schema.md) / [ベンチマーク](docs/06-benchmarks/01-mvp-benchmarks.md) |
+| パス                        | 内容                                                                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/endevir`          | テスト記述API・ランナー・待機・アプリ内エージェント（Flutter）                                                                                                                        |
+| `packages/endevir_reporter` | traceスキーマ型・TraceWriter・HTMLレポート（pure Dart）                                                                                                                               |
+| `packages/endevir_cli`      | init・doctor・test・develop・Android instrumentation CLI                                                                                                                              |
+| `examples/flutter_app`      | 検証用アプリ（M0スパイクの成果物を含む）                                                                                                                                              |
+| `schema/`                   | trace/プロトコルのJSON Schema（単一の真実、`pnpm codegen` で型生成）                                                                                                                  |
+| `docs/`                     | [ADR](docs/01-adr/README.md) / [設計](docs/02-design/01-trace-schema.md) / [ベンチマーク](docs/03-benchmarks/01-mvp-benchmarks.md) / [Cloud連携契約](docs/04-integration/01-cloud.md) |
 
 ## 開発
 
@@ -61,13 +61,13 @@ pnpm install && pnpm lint:md && pnpm format:check
 pnpm codegen              # スキーマから型を再生成
 ```
 
-原則TDD。技術決定は[ADR](docs/04-adr/README.md)に記録する。
+原則TDD。技術決定は[ADR](docs/01-adr/README.md)に記録する。
 
 ## 関連リポジトリ
 
 Endevir Cloudの公式サイト・ダッシュボード・実行基盤は別リポジトリで
 開発しています。公開される連携境界は
-[Cloud integration contract](docs/02-spec/07-cloud-integration.md)を参照してください。
+[Cloud integration contract](docs/04-integration/01-cloud.md)を参照してください。
 
 ## ライセンス
 

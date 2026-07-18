@@ -60,5 +60,5 @@ endevir native android --build
 ```
 
 The generated APK pair has been verified with Firebase Test Lab. See the
-[benchmark record](https://github.com/HyuCode/endevir/blob/main/docs/06-benchmarks/01-mvp-benchmarks.md)
+[benchmark record](https://github.com/HyuCode/endevir/blob/main/docs/03-benchmarks/01-mvp-benchmarks.md)
 for the tested environment.

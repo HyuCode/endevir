@@ -2,11 +2,11 @@
 
 - 日付: 2026-07-17
 - ステータス: Accepted
-- 関連: CORE-102、S3スパイク、[検証コード](../../examples/flutter_app/integration_test/s3_event_driven_waiting_test.dart)
+- 関連: [検証テスト](../../examples/flutter_app/integration_test/s3_event_driven_waiting_test.dart)
 
 ## 背景・課題
 
-CORE-102は「自動待機はイベント駆動とし、画像差分ポーリングや固定sleepに依存しない」を要求する。検証したい問いは、フレームスケジューラのシグナル（postFrameCallback / hasScheduledFrame / transientCallbackCount）だけで「要素の出現」「アニメーション終了」を正しく・低オーバーヘッドで待てるか。MVP最大の技術リスクのため、M0で最初に検証した。
+自動待機は画像差分ポーリングや固定sleepに依存せず、低オーバーヘッドで動作する必要がある。フレームスケジューラのシグナル（postFrameCallback / hasScheduledFrame / transientCallbackCount）だけで「要素の出現」「アニメーション終了」を正しく待てるかを検証した。
 
 ## 検討した選択肢
 
@@ -25,22 +25,22 @@ CORE-102は「自動待機はイベント駆動とし、画像差分ポーリン
 
 ### 案B: 固定間隔ポーリング（widget testのpumpループ、Maestroの画像差分の系譜）
 
-- 実装は単純だが、10ms間隔なら3秒待機で約300回の評価が発生し、間隔とレイテンシのトレードオフが常に残る。Maestroの画像差分（200ms間隔+スクリーンショット撮影）は1回あたりのコストが桁違いに大きく、実測でスイート肥大の主因（01-maestro-analysis.md §4.4）
+- 実装は単純だが、10ms間隔なら3秒待機で約300回の評価が発生し、間隔とレイテンシのトレードオフが常に残る。画像差分方式ではスクリーンショット撮影のコストも加わる
 - 不採用。ただしイベント駆動が不成立の環境向けのフォールバックとしては保持しうる
 
 ## 決定
 
 案Aを採用する。待機APIは「**要素待機（waitForMatch）**」と「**全体静止待機（waitForQuiescence）**」を分離して提供する。無限アニメーション画面では後者は永遠に成立しない（正しくタイムアウトする）が前者は即座に成立することが実証済みで、この分離がpumpAndSettleタイムアウト問題（flutter/flutter #88765系のペイン）の構造的解決になる。
 
-## スパイクで得た副次的発見（M1設計への制約）
+## 実装上の制約
 
 1. **framePolicyの前提**: integration_testバインディングのデフォルト（fadePointers）では、アプリのsetStateによるフレーム要求がpump()まで描画されず、イベント駆動待機が成立しない。`fullyLive` 相当が実行環境の前提条件になる
-2. **自前バインディングの必要性**: `LiveTestWidgetsFlutterBinding.handleDrawFrame` はbenchmark以外の全ポリシーで毎フレーム後に `platformDispatcher.scheduleFrame()` を無条件に呼ぶ（flutter_test/src/binding.dart 2522-2524行、Flutter 3.41.1）。このため既存バインディング上では静止画面でも常時60fpsとなり、「アイドル時の再評価ゼロ」は実現できない。**真のアイドルコストゼロと省電力なCI実行にはEndevir自前バインディング（PatrolBinding相当）が必要**。M1のランナー設計に反映する
+2. **自前バインディングの必要性**: `LiveTestWidgetsFlutterBinding.handleDrawFrame` はbenchmark以外の全ポリシーで毎フレーム後に `platformDispatcher.scheduleFrame()` を無条件に呼ぶ（flutter_test/src/binding.dart 2522-2524行、Flutter 3.41.1）。このため既存バインディング上では静止画面でも常時60fpsとなり、「アイドル時の再評価ゼロ」は実現できない。**真のアイドルコストゼロと省電力なCI実行にはEndevir自前バインディングが必要**
 3. 再評価1回のコストはウィジェットツリー走査のみで、60fps下でも実測上問題にならない（13秒で5シナリオ完走）
 
 ## 影響
 
-- CORE-102の実装方式が確定。M1ウォーキングスケルトンの待機実装はこのプロトタイプ（EventDrivenWaiter）を出発点にする
-- M1でEndevir自前バインディングを設計する（発見事項2）。integration_test互換レイヤーとしてfullyLive前提を吸収する
-- ネットワークアイドル検知は本スパイクでは未検証。バックエンド連携（BE-xxx）設計時に別途検証する
+- 待機実装は検証済みのEventDrivenWaiterを出発点にする
+- Endevir自前バインディングでintegration_test互換レイヤーのfullyLive前提を吸収する
+- ネットワークアイドル検知は本ADRの対象外とし、必要になった時点で別途検討する
 - 見直しトリガー: Flutter本体のバインディング実装が大きく変わった場合（バージョン互換CIで検知）

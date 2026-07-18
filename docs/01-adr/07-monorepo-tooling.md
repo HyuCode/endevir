@@ -2,18 +2,17 @@
 
 - 日付: 2026-07-17
 - ステータス: Accepted
-- 関連: NFR-301、M1（モノレポ初期化）
 
 ## 背景・課題
 
-モノレポ（packages/endevir, endevir_reporter, endevir_cli, examples/flutter_app, 将来のapps/）の依存解決とタスク実行の管理方式を決める。候補はDart公式のpub workspaces（Dart 3.6+）と、Flutterモノレポの定番だったmelos。
+モノレポ（packages/endevir, endevir_reporter, endevir_cli, examples/flutter_app）の依存解決とタスク実行の管理方式を決める。候補はDart公式のpub workspaces（Dart 3.6+）と、Flutterモノレポで広く使われるmelos。
 
 ## 検討した選択肢
 
 ### 案A: pub workspaces（採用）
 
 - Dart 3.11（Flutter 3.41同梱）でネイティブサポート。ルートpubspecの `workspace:` + 各メンバーの `resolution: workspace` のみで、**単一のlockfile・単一の依存解決**になる
-- 追加ツールのインストール不要（導入時間最短、NFR-001の思想と整合）
+- 追加ツールのインストールが不要
 - 検証済み: 4パッケージのワークスペース解決・`flutter analyze`・`flutter test` が問題なく動作
 - 弱点: タスクランナー機能（全パッケージ一括テスト等）はない → 当面はルートのpackage.jsonスクリプト（既存のpnpm運用）とCIのマトリクスで代替
 
@@ -24,7 +23,7 @@
 
 ## 決定
 
-pub workspacesのみで開始する。melosはP2（publish運用開始）前に再評価する。
+pub workspacesのみで開始する。publish管理や一括タスク実行が必要になった時点でmelosを再評価する。
 
 ## 影響
 

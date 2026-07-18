@@ -1,4 +1,15 @@
 import 'package:endevir_reporter/endevir_reporter.dart';
+import 'package:flutter/cupertino.dart' show CupertinoButton, CupertinoSwitch;
+import 'package:flutter/gestures.dart' show HitTestResult;
+import 'package:flutter/material.dart'
+    show
+        ButtonStyleButton,
+        Checkbox,
+        FloatingActionButton,
+        IconButton,
+        Slider,
+        Switch,
+        TextField;
 import 'package:flutter/widgets.dart';
 
 import '../evidence/evidence_recorder.dart';
@@ -113,7 +124,7 @@ class EndevirTester {
   Future<WaitResult> expectVisible(Object target, {Duration? timeout}) {
     final finder = EndevirFinder.from(target);
     return _waiter.waitUntil(
-      () => _resolveVisible(finder).isNotEmpty,
+      () => _resolveSingleVisible(finder) != null,
       timeout: timeout ?? defaultTimeout,
       describe: 'visible: ${finder.describe()}',
     );
@@ -124,12 +135,47 @@ class EndevirTester {
       .where(_isActuallyVisible)
       .toList(growable: false);
 
+  Element? _resolveSingleVisible(EndevirFinder finder) {
+    final elements = _resolveVisible(finder);
+    if (elements.length > 1) {
+      throw AmbiguousFinderException(
+        finder.describe(),
+        elements.map(_describeCandidate).toList(growable: false),
+      );
+    }
+    return elements.firstOrNull;
+  }
+
+  String _describeCandidate(Element element) {
+    final widget = element.widget;
+    final key = widget.key;
+    final text = widget is Text ? widget.data : null;
+    final renderObject = element.renderObject;
+    final rect =
+        renderObject is RenderBox &&
+            renderObject.attached &&
+            renderObject.hasSize
+        ? renderObject.localToGlobal(Offset.zero) & renderObject.size
+        : null;
+    return '- ${widget.runtimeType}'
+        '${key == null ? '' : ' key=$key'}'
+        '${text == null ? '' : ' text="$text"'}'
+        '${rect == null ? '' : ' rect=$rect'}';
+  }
+
   bool _isActuallyVisible(Element element) {
     var hiddenByAncestor = false;
+    bool isHidden(Widget widget) =>
+        (widget is Offstage && widget.offstage) ||
+        (widget is Visibility && !widget.visible) ||
+        (widget is Opacity && widget.opacity == 0) ||
+        (widget is AnimatedOpacity && widget.opacity == 0) ||
+        (widget is FadeTransition && widget.opacity.value == 0);
+
+    if (isHidden(element.widget)) return false;
     element.visitAncestorElements((ancestor) {
       final widget = ancestor.widget;
-      if ((widget is Offstage && widget.offstage) ||
-          (widget is Visibility && !widget.visible)) {
+      if (isHidden(widget)) {
         hiddenByAncestor = true;
         return false;
       }
@@ -155,6 +201,67 @@ class EndevirTester {
     }
     return renderObject?.attached ?? false;
   }
+
+  bool _isPointerActionable(Element element, Offset center) {
+    if (!_isEnabledForPointerAction(element)) return false;
+
+    final targetRenderObjects = <RenderObject>{};
+    void collectRenderObjects(Element current) {
+      final renderObject = current.renderObject;
+      if (renderObject != null) targetRenderObjects.add(renderObject);
+      current.visitChildren(collectRenderObjects);
+    }
+
+    collectRenderObjects(element);
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (targetRenderObjects.isEmpty || view == null) return false;
+
+    final result = HitTestResult();
+    WidgetsBinding.instance.hitTestInView(result, center, view.viewId);
+    return result.path.any((entry) {
+      final target = entry.target;
+      if (target is! RenderObject) return false;
+      RenderObject? current = target;
+      while (current != null) {
+        if (targetRenderObjects.contains(current)) return true;
+        final parent = current.parent;
+        current = parent is RenderObject ? parent : null;
+      }
+      return false;
+    });
+  }
+
+  bool _isEnabledForPointerAction(Element element) {
+    var enabled = true;
+
+    bool widgetIsEnabled(Widget widget) {
+      if (widget is IgnorePointer && widget.ignoring) return false;
+      if (widget is AbsorbPointer && widget.absorbing) return false;
+      if (widget is Semantics && widget.properties.enabled == false) {
+        return false;
+      }
+      if (widget is ButtonStyleButton) return widget.enabled;
+      if (widget is IconButton) return widget.onPressed != null;
+      if (widget is FloatingActionButton) return widget.onPressed != null;
+      if (widget is Switch) return widget.onChanged != null;
+      if (widget is Checkbox) return widget.onChanged != null;
+      if (widget is Slider) return widget.onChanged != null;
+      if (widget is TextField) return widget.enabled != false;
+      if (widget is CupertinoButton) return widget.onPressed != null;
+      if (widget is CupertinoSwitch) return widget.onChanged != null;
+      return true;
+    }
+
+    if (!widgetIsEnabled(element.widget)) return false;
+    element.visitAncestorElements((ancestor) {
+      if (!widgetIsEnabled(ancestor.widget)) {
+        enabled = false;
+        return false;
+      }
+      return true;
+    });
+    return enabled;
+  }
 }
 
 /// ファインダーへの操作ハンドル。
@@ -168,14 +275,14 @@ class EndevirElement {
   Future<void> tap({Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
     await _tester._waiter.waitUntil(
-      () => tracker.update(_currentCenter()),
+      () => tracker.update(_currentActionableCenter()),
       timeout: timeout ?? _tester.defaultTimeout,
       describe: 'tap(stable): ${_finder.describe()}',
       // 安定判定は連続フレームでの評価が前提（静止画面ではフレームが
       // 流れないため、評価ごとに次フレームを要求する）
       keepFramesFlowing: true,
     );
-    final center = _currentCenter();
+    final center = _currentActionableCenter();
     if (center == null) {
       throw StateError('tap target vanished: ${_finder.describe()}');
     }
@@ -186,12 +293,12 @@ class EndevirElement {
   Future<void> dragBy(Offset delta, {Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
     await _tester._waiter.waitUntil(
-      () => tracker.update(_currentCenter()),
+      () => tracker.update(_currentActionableCenter()),
       timeout: timeout ?? _tester.defaultTimeout,
       describe: 'drag(stable): ${_finder.describe()}',
       keepFramesFlowing: true,
     );
-    final center = _currentCenter();
+    final center = _currentActionableCenter();
     if (center == null) {
       throw StateError('drag target vanished: ${_finder.describe()}');
     }
@@ -216,19 +323,23 @@ class EndevirElement {
   Future<void> enterText(String text, {Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
     await _tester._waiter.waitUntil(
-      () => tracker.update(_currentCenter()),
+      () => tracker.update(_currentActionableCenter(forTextInput: true)),
       timeout: timeout ?? _tester.defaultTimeout,
       describe: 'enterText(stable): ${_finder.describe()}',
       keepFramesFlowing: true,
     );
 
-    final elements = _tester._resolveVisible(_finder);
-    if (elements.isEmpty) {
+    final element = _tester._resolveSingleVisible(_finder);
+    if (element == null) {
       throw StateError('入力対象が表示されていません: ${_finder.describe()}');
     }
-    final editable = _findEditableText(elements.first);
+    final editable = _findEditableText(element);
     if (editable == null) {
       throw StateError('EditableTextが見つかりません: ${_finder.describe()}');
+    }
+    if (editable.widget.readOnly ||
+        !editable.widget.focusNode.canRequestFocus) {
+      throw StateError('入力対象が無効です: ${_finder.describe()}');
     }
     editable.widget.focusNode.requestFocus();
     editable.updateEditingValue(
@@ -255,11 +366,23 @@ class EndevirElement {
     return found;
   }
 
-  Offset? _currentCenter() {
-    final elements = _tester._resolveVisible(_finder);
-    if (elements.isEmpty) return null;
-    final renderObject = elements.first.renderObject;
+  Offset? _currentActionableCenter({bool forTextInput = false}) {
+    final element = _tester._resolveSingleVisible(_finder);
+    if (element == null) return null;
+    final renderObject = element.renderObject;
     if (renderObject is! RenderBox || !renderObject.attached) return null;
-    return renderObject.localToGlobal(renderObject.size.center(Offset.zero));
+    final center = renderObject.localToGlobal(
+      renderObject.size.center(Offset.zero),
+    );
+    if (!_tester._isPointerActionable(element, center)) return null;
+    if (forTextInput) {
+      final editable = _findEditableText(element);
+      if (editable == null ||
+          editable.widget.readOnly ||
+          !editable.widget.focusNode.canRequestFocus) {
+        return null;
+      }
+    }
+    return center;
   }
 }

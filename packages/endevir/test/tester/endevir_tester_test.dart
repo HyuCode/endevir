@@ -22,11 +22,11 @@ void main() {
   });
 
   EndevirTester makeTester(WidgetTester tester) => EndevirTester(
-        writer: writer,
-        testId: 1,
-        frameSignal: signal,
-        rootResolver: () => tester.binding.rootElement!,
-      );
+    writer: writer,
+    testId: 1,
+    frameSignal: signal,
+    rootResolver: () => tester.binding.rootElement!,
+  );
 
   Widget counterApp() => const MaterialApp(home: _CounterScreen());
 
@@ -54,6 +54,52 @@ void main() {
     await tester.pump();
 
     expect(done, isTrue);
+  });
+
+  testWidgets('expectVisibleはOffstageの古い画面を表示中と判定しない', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Stack(
+          children: [
+            Offstage(offstage: true, child: Text('古い画面')),
+            Text('現在の画面'),
+          ],
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    await expectLater(e.expectVisible('現在の画面'), completes);
+
+    final expectation = expectLater(
+      e.expectVisible('古い画面', timeout: const Duration(milliseconds: 50)),
+      throwsA(isA<WaitTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
+  });
+
+  testWidgets('expectVisibleは画面外の要素を表示中と判定しない', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(top: 1000, child: Text('画面外')),
+            Text('画面内'),
+          ],
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    await expectLater(e.expectVisible('画面内'), completes);
+    final expectation = expectLater(
+      e.expectVisible('画面外', timeout: const Duration(milliseconds: 50)),
+      throwsA(isA<WaitTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
   });
 
   testWidgets(r'$(...).tap()は位置安定を待ってからタップする', (tester) async {
@@ -94,7 +140,11 @@ void main() {
 
     // フォームセクション配下のTextFieldに絞って入力
     var done = false;
-    e.$(#form_section).$(TextField).enterText('scoped').then((_) => done = true);
+    e
+        .$(#form_section)
+        .$(TextField)
+        .enterText('scoped')
+        .then((_) => done = true);
     for (var i = 0; i < 5 && !done; i++) {
       signal.tick();
       await tester.pump();
@@ -110,11 +160,11 @@ void main() {
 
     Object? error;
     // ignore: avoid_types_on_closure_parameters
-    e.$(#missing).tap(timeout: const Duration(milliseconds: 50)).catchError(
-      (Object err) {
-        error = err;
-      },
-    );
+    e.$(#missing).tap(timeout: const Duration(milliseconds: 50)).catchError((
+      Object err,
+    ) {
+      error = err;
+    });
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(error, isA<WaitTimeoutException>());
@@ -145,14 +195,13 @@ void _screenshotTests() {
   List<TraceEvent> parsed() =>
       lines.map((line) => traceEventFromJson(line)).toList();
 
-  EndevirTester tester(ScreenshotMode mode, {int attempt = 1}) =>
-      EndevirTester(
-        writer: writer,
-        testId: 1,
-        evidence: recorder,
-        screenshotMode: mode,
-        attempt: attempt,
-      );
+  EndevirTester tester(ScreenshotMode mode, {int attempt = 1}) => EndevirTester(
+    writer: writer,
+    testId: 1,
+    evidence: recorder,
+    screenshotMode: mode,
+    attempt: attempt,
+  );
 
   testWidgets('証跡モード: 成功したstepもスクリーンショットを記録する', (t) async {
     final e = tester(ScreenshotMode.evidence);
@@ -161,8 +210,9 @@ void _screenshotTests() {
     capturer.encodes.single.complete([1]);
     await recorder.flush();
 
-    final stepEnd =
-        parsed().firstWhere((ev) => ev.type == TraceEventType.STEP_END);
+    final stepEnd = parsed().firstWhere(
+      (ev) => ev.type == TraceEventType.STEP_END,
+    );
     expect(stepEnd.screenshot, 'shots/1.png');
     expect(delivered, ['shots/1.png']);
   });
@@ -176,8 +226,9 @@ void _screenshotTests() {
       throwsStateError,
     );
 
-    final stepEnds =
-        parsed().where((ev) => ev.type == TraceEventType.STEP_END).toList();
+    final stepEnds = parsed()
+        .where((ev) => ev.type == TraceEventType.STEP_END)
+        .toList();
     expect(stepEnds[0].screenshot, isNull);
     expect(stepEnds[1].screenshot, isNotNull);
     expect(capturer.captured, 1);
@@ -187,15 +238,16 @@ void _screenshotTests() {
     await tester(ScreenshotMode.onFirstRetry).step('初回', () async {});
     expect(capturer.captured, 0);
 
-    await tester(ScreenshotMode.onFirstRetry, attempt: 2)
-        .step('リトライ', () async {});
+    await tester(
+      ScreenshotMode.onFirstRetry,
+      attempt: 2,
+    ).step('リトライ', () async {});
     expect(capturer.captured, 1);
   });
 
   testWidgets('noneモード: 記録しない', (t) async {
     await expectLater(
-      tester(ScreenshotMode.none)
-          .step('失敗', () async => throw StateError('x')),
+      tester(ScreenshotMode.none).step('失敗', () async => throw StateError('x')),
       throwsStateError,
     );
     expect(capturer.captured, 0);
@@ -210,9 +262,7 @@ class _FormScreen extends StatelessWidget {
     return Scaffold(
       body: Column(
         key: const ValueKey('form_section'),
-        children: const [
-          TextField(key: ValueKey('email')),
-        ],
+        children: const [TextField(key: ValueKey('email'))],
       ),
     );
   }

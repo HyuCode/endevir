@@ -26,12 +26,12 @@ class EndevirTester {
     this.screenshotMode = ScreenshotMode.onFailure,
     this.attempt = 1,
     LogCorrelator? logCorrelator,
-  })  : _writer = writer,
-        _testId = testId,
-        _waiter = FrameWaiter(frameSignal),
-        _rootResolver = rootResolver ?? _defaultRoot,
-        _evidence = evidence,
-        _logCorrelator = logCorrelator;
+  }) : _writer = writer,
+       _testId = testId,
+       _waiter = FrameWaiter(frameSignal),
+       _rootResolver = rootResolver ?? _defaultRoot,
+       _evidence = evidence,
+       _logCorrelator = logCorrelator;
 
   static Element _defaultRoot() => WidgetsBinding.instance.rootElement!;
 
@@ -64,20 +64,29 @@ class EndevirTester {
     _logCorrelator?.pushStep(stepId);
     try {
       final result = await body();
-      _writer.stepEnd(stepId, TraceStatus.PASSED,
-          screenshot: await _captureIf(passed: true, stepId: stepId));
+      _writer.stepEnd(
+        stepId,
+        TraceStatus.PASSED,
+        screenshot: await _captureIf(passed: true, stepId: stepId),
+      );
       return result;
     } catch (e) {
-      _writer.stepEnd(stepId, TraceStatus.FAILED,
-          error: '$e',
-          screenshot: await _captureIf(passed: false, stepId: stepId));
+      _writer.stepEnd(
+        stepId,
+        TraceStatus.FAILED,
+        error: '$e',
+        screenshot: await _captureIf(passed: false, stepId: stepId),
+      );
       rethrow;
     } finally {
       _logCorrelator?.popStep();
     }
   }
 
-  Future<String?> _captureIf({required bool passed, required int stepId}) async {
+  Future<String?> _captureIf({
+    required bool passed,
+    required int stepId,
+  }) async {
     final recorder = _evidence;
     if (recorder == null) return null;
     final shouldCapture = switch (screenshotMode) {
@@ -104,10 +113,47 @@ class EndevirTester {
   Future<WaitResult> expectVisible(Object target, {Duration? timeout}) {
     final finder = EndevirFinder.from(target);
     return _waiter.waitUntil(
-      () => finder.resolve(_rootResolver()).isNotEmpty,
+      () => _resolveVisible(finder).isNotEmpty,
       timeout: timeout ?? defaultTimeout,
       describe: 'visible: ${finder.describe()}',
     );
+  }
+
+  List<Element> _resolveVisible(EndevirFinder finder) => finder
+      .resolve(_rootResolver())
+      .where(_isActuallyVisible)
+      .toList(growable: false);
+
+  bool _isActuallyVisible(Element element) {
+    var hiddenByAncestor = false;
+    element.visitAncestorElements((ancestor) {
+      final widget = ancestor.widget;
+      if ((widget is Offstage && widget.offstage) ||
+          (widget is Visibility && !widget.visible)) {
+        hiddenByAncestor = true;
+        return false;
+      }
+      return true;
+    });
+    if (hiddenByAncestor) return false;
+
+    final renderObject = element.renderObject;
+    if (renderObject is RenderBox) {
+      if (!renderObject.attached ||
+          !renderObject.hasSize ||
+          renderObject.size.isEmpty) {
+        return false;
+      }
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view == null) return false;
+      final viewport =
+          Offset.zero & (view.physicalSize / view.devicePixelRatio);
+      final center = renderObject.localToGlobal(
+        renderObject.size.center(Offset.zero),
+      );
+      return viewport.contains(center);
+    }
+    return renderObject?.attached ?? false;
   }
 }
 
@@ -120,8 +166,7 @@ class EndevirElement {
 
   /// 対象の出現と位置安定（actionability check、ADR-003）を待ってタップする。
   Future<void> tap({Duration? timeout}) async {
-    final tracker =
-        StabilityTracker(requiredFrames: _tester.stabilityFrames);
+    final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
     await _tester._waiter.waitUntil(
       () => tracker.update(_currentCenter()),
       timeout: timeout ?? _tester.defaultTimeout,
@@ -137,6 +182,22 @@ class EndevirElement {
     await _tester._pointer.tapAt(center);
   }
 
+  /// 対象の中心から[delta]分だけドラッグする。
+  Future<void> dragBy(Offset delta, {Duration? timeout}) async {
+    final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
+    await _tester._waiter.waitUntil(
+      () => tracker.update(_currentCenter()),
+      timeout: timeout ?? _tester.defaultTimeout,
+      describe: 'drag(stable): ${_finder.describe()}',
+      keepFramesFlowing: true,
+    );
+    final center = _currentCenter();
+    if (center == null) {
+      throw StateError('drag target vanished: ${_finder.describe()}');
+    }
+    await _tester._pointer.dragBy(center, delta);
+  }
+
   /// 対象が表示されるまで待つ。
   Future<WaitResult> waitUntilVisible({Duration? timeout}) =>
       _tester.expectVisible(_finder, timeout: timeout);
@@ -144,12 +205,9 @@ class EndevirElement {
   /// このスコープの配下から検索するハンドルを返す（チェーン、CORE-002）。
   // ignore: non_constant_identifier_names
   EndevirElement $(Object target) => EndevirElement(
-        EndevirFinder.descendant(
-          of: _finder,
-          matching: EndevirFinder.from(target),
-        ),
-        _tester,
-      );
+    EndevirFinder.descendant(of: _finder, matching: EndevirFinder.from(target)),
+    _tester,
+  );
 
   /// 対象（またはその配下のEditableText）へテキストを入力する。
   ///
@@ -164,17 +222,21 @@ class EndevirElement {
       keepFramesFlowing: true,
     );
 
-    final elements = _finder.resolve(_tester._rootResolver());
+    final elements = _tester._resolveVisible(_finder);
+    if (elements.isEmpty) {
+      throw StateError('入力対象が表示されていません: ${_finder.describe()}');
+    }
     final editable = _findEditableText(elements.first);
     if (editable == null) {
-      throw StateError(
-          'EditableTextが見つかりません: ${_finder.describe()}');
+      throw StateError('EditableTextが見つかりません: ${_finder.describe()}');
     }
     editable.widget.focusNode.requestFocus();
-    editable.updateEditingValue(TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    ));
+    editable.updateEditingValue(
+      TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      ),
+    );
   }
 
   /// 要素自身または配下からEditableTextStateを探す。
@@ -194,12 +256,10 @@ class EndevirElement {
   }
 
   Offset? _currentCenter() {
-    final elements = _finder.resolve(_tester._rootResolver());
+    final elements = _tester._resolveVisible(_finder);
     if (elements.isEmpty) return null;
     final renderObject = elements.first.renderObject;
     if (renderObject is! RenderBox || !renderObject.attached) return null;
-    return renderObject.localToGlobal(
-      renderObject.size.center(Offset.zero),
-    );
+    return renderObject.localToGlobal(renderObject.size.center(Offset.zero));
   }
 }

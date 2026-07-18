@@ -25,6 +25,9 @@ jobs:
       - name: Test endevir_reporter
         run: dart test
         working-directory: packages/endevir_reporter
+      - name: Test endevir_cli
+        run: dart test
+        working-directory: packages/endevir_cli
       - name: Test example app (widget tests)
         run: flutter test
         working-directory: examples/flutter_app

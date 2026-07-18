@@ -1,0 +1,21 @@
+# Endevir licensing
+
+This repository contains components under different licenses.
+
+## Open-source components
+
+Except for `apps/cloud`, the source code and documentation in this repository
+are licensed under the Apache License, Version 2.0.
+
+This includes the published Dart and Flutter packages under `packages/`, the
+example application, schemas, scripts, documentation, and development
+configuration. Each published package also carries its own copy of the license.
+
+The complete license text is available at `LICENSES/Apache-2.0.txt`.
+
+## Endevir Cloud
+
+The source code under `apps/cloud` is proprietary and is not licensed under
+the Apache License, Version 2.0. See `apps/cloud/LICENSE`.
+
+Copyright 2026 HyuCode. All rights reserved.

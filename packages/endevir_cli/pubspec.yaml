@@ -1,16 +1,22 @@
 name: endevir_cli
-description: A sample command-line application.
-version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+description: Command-line runner, project setup, diagnostics, and fast development loop for Endevir Flutter E2E tests.
+version: 0.1.0-alpha.1
+homepage: https://github.com/HyuCode/endevir
+repository: https://github.com/HyuCode/endevir/tree/main/packages/endevir_cli
+issue_tracker: https://github.com/HyuCode/endevir/issues
+topics:
+  - flutter
+  - testing
+  - e2e-testing
+  - cli
 
 environment:
   sdk: ^3.11.0
 
-# Add regular dependencies here.
 dependencies:
   analyzer: ^10.0.1
   args: ^2.7.0
-  endevir_reporter: ^1.0.0
+  endevir_reporter: ^0.1.0-alpha.1
   path: ^1.9.0
   yaml: ^3.1.3
 
@@ -18,5 +24,8 @@ dev_dependencies:
   fake_async: ^1.3.3
   lints: ^6.0.0
   test: ^1.25.6
+
+executables:
+  endevir: endevir_cli
 
 resolution: workspace

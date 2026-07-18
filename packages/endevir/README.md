@@ -1,39 +1,68 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# Endevir
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+Endevir is a Flutter E2E testing framework focused on reliable automatic waits,
+fast reruns, and reviewable execution evidence.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+> Endevir is preparing for its first alpha release. APIs may change before the
+> stable release.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- Event-driven waits with actionability and position-stability checks
+- Lazy finders for keys, text, regular expressions, widget types, semantics,
+  and descendant scopes
+- Named steps with screenshots and correlated Dart logs
+- Per-test retries and configurable timeouts
+- The same test bundle runs on iOS and Android
 
 ## Getting started
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+Add the test API and CLI to a Flutter application:
 
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
-
-```dart
-const like = 'sample';
+```console
+flutter pub add endevir
+flutter pub add --dev endevir_cli
+dart run endevir_cli:endevir_cli init
 ```
 
-## Additional information
+Until the packages are published, clone the Endevir repository and run:
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+```console
+dart run endevir_cli:endevir_cli init --endevir-path /path/to/endevir
+```
+
+The initializer creates `endevir_test/main_test.dart`, a smoke test, and
+`endevir.yaml` without overwriting existing files.
+
+## Writing a test
+
+```dart
+import 'package:endevir/endevir.dart';
+
+void main() {
+  endevirTest('signs in', (e) async {
+    await e.step('Enter credentials', () async {
+      await e.$(#emailField).enterText('dev@example.com');
+      await e.$(#submitButton).tap();
+    });
+    await e.expectVisible('Welcome');
+  });
+}
+```
+
+Register test files through the generated bundle in
+`endevir_test/main_test.dart`, then execute them on a simulator or emulator:
+
+```console
+dart run endevir_cli:endevir_cli test -p ios -d <simulator-udid>
+dart run endevir_cli:endevir_cli test -p android -d <adb-serial>
+```
+
+Each run writes `.endevir/trace.jsonl` and a self-contained
+`.endevir/report.html` evidence report.
+
+## Status and support
+
+The supported toolchain is Flutter 3.41 or newer with Dart 3.11 or newer.
+File bugs and feature requests in the
+[Endevir issue tracker](https://github.com/HyuCode/endevir/issues).

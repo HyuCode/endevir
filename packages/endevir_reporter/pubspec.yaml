@@ -1,14 +1,16 @@
 name: endevir_reporter
-description: A starting point for Dart libraries or applications.
-version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+description: Language-neutral trace models and self-contained HTML evidence reports for Endevir test runs.
+version: 0.1.0-alpha.1
+homepage: https://github.com/HyuCode/endevir
+repository: https://github.com/HyuCode/endevir/tree/main/packages/endevir_reporter
+issue_tracker: https://github.com/HyuCode/endevir/issues
+topics:
+  - testing
+  - test-reporting
+  - e2e-testing
 
 environment:
   sdk: ^3.11.0
-
-# Add regular dependencies here.
-dependencies:
-  # path: ^1.9.0
 
 dev_dependencies:
   lints: ^6.0.0

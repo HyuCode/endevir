@@ -73,4 +73,114 @@ dependencies:
       expect(() => scaffoldProject(notAProject.path), throwsStateError);
     });
   });
+
+  group('initializeProject transaction', () {
+    Future<ProcessResult> failingPubAdd(
+      String executable,
+      List<String> arguments, {
+      String? workingDirectory,
+    }) async {
+      final root = workingDirectory!;
+      File('$root/pubspec.yaml').writeAsStringSync('''
+name: my_app
+dependencies:
+  endevir:
+    path: /temporary/endevir/packages/endevir
+''');
+      File('$root/pubspec.lock').writeAsStringSync('partial lock');
+      File('$root/.dart_tool/package_config.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('partial config');
+      return ProcessResult(1, 1, '', 'version solving failed');
+    }
+
+    test('pub add失敗時にpubspecと新規雛形・生成ディレクトリを戻す', () async {
+      final originalPubspec =
+          File('${tempDir.path}/pubspec.yaml').readAsStringSync();
+
+      final result = await initializeProject(
+        projectRoot: tempDir.path,
+        dependencySpecs: const ['endevir'],
+        flutter: 'flutter',
+        processRunner: failingPubAdd,
+      );
+
+      expect(result.exitCode, 1);
+      expect(result.rolledBack, isTrue);
+      expect(result.error, contains('version solving failed'));
+      expect(File('${tempDir.path}/pubspec.yaml').readAsStringSync(),
+          originalPubspec);
+      expect(File('${tempDir.path}/pubspec.lock').existsSync(), isFalse);
+      expect(Directory('${tempDir.path}/endevir_test').existsSync(), isFalse);
+      expect(Directory('${tempDir.path}/.dart_tool').existsSync(), isFalse);
+      expect(File('${tempDir.path}/endevir.yaml').existsSync(), isFalse);
+    });
+
+    test('既存ファイルとbundleを失敗後にbyte単位で復元する', () async {
+      final testDir = Directory('${tempDir.path}/endevir_test')..createSync();
+      final mainTest = File('${testDir.path}/main_test.dart')
+        ..writeAsStringSync('// user main');
+      final bundle = File('${testDir.path}/test_bundle.g.dart')
+        ..writeAsStringSync('// previous bundle');
+      final lock = File('${tempDir.path}/pubspec.lock')
+        ..writeAsStringSync('previous lock');
+
+      final result = await initializeProject(
+        projectRoot: tempDir.path,
+        dependencySpecs: const ['endevir'],
+        flutter: 'flutter',
+        processRunner: failingPubAdd,
+      );
+
+      expect(result.rolledBack, isTrue);
+      expect(mainTest.readAsStringSync(), '// user main');
+      expect(bundle.readAsStringSync(), '// previous bundle');
+      expect(lock.readAsStringSync(), 'previous lock');
+      expect(File('${testDir.path}/app_smoke_test.dart').existsSync(), isFalse);
+      expect(testDir.existsSync(), isTrue);
+    });
+
+    test('成功時は雛形とpub addの変更を確定する', () async {
+      final result = await initializeProject(
+        projectRoot: tempDir.path,
+        dependencySpecs: const ['endevir'],
+        flutter: 'flutter',
+        processRunner: (
+          executable,
+          arguments, {
+          workingDirectory,
+        }) async {
+          expect(workingDirectory, tempDir.path);
+          expect(arguments, ['pub', 'add', 'endevir']);
+          File('${workingDirectory!}/pubspec.yaml')
+              .writeAsStringSync('name: my_app\ndependencies:\n  endevir: any\n');
+          return ProcessResult(1, 0, '', '');
+        },
+      );
+
+      expect(result.exitCode, 0);
+      expect(result.rolledBack, isFalse);
+      expect(File('${tempDir.path}/pubspec.yaml').readAsStringSync(),
+          contains('endevir: any'));
+      expect(Directory('${tempDir.path}/endevir_test').existsSync(), isTrue);
+    });
+
+    test('pub processを開始できない場合もrollbackする', () async {
+      final result = await initializeProject(
+        projectRoot: tempDir.path,
+        dependencySpecs: const ['endevir'],
+        flutter: 'missing-flutter',
+        processRunner: (
+          executable,
+          arguments, {
+          workingDirectory,
+        }) async =>
+            throw ProcessException(executable, arguments, 'not found'),
+      );
+
+      expect(result.exitCode, 1);
+      expect(result.rolledBack, isTrue);
+      expect(Directory('${tempDir.path}/endevir_test').existsSync(), isFalse);
+    });
+  });
 }

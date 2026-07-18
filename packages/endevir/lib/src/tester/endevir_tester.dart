@@ -32,12 +32,15 @@ class EndevirTester {
     FrameSignal frameSignal = const SchedulerFrameSignal(),
     Element Function()? rootResolver,
     this.stabilityFrames = 3,
+    this.settleFrames = 1,
     this.defaultTimeout = const Duration(seconds: 10),
     EvidenceRecorder? evidence,
     this.screenshotMode = ScreenshotMode.onFailure,
     this.attempt = 1,
     LogCorrelator? logCorrelator,
   }) : _writer = writer,
+       assert(stabilityFrames > 0),
+       assert(settleFrames >= 0),
        _testId = testId,
        _waiter = FrameWaiter(frameSignal),
        _rootResolver = rootResolver ?? _defaultRoot,
@@ -63,8 +66,18 @@ class EndevirTester {
   /// タップ前の位置安定判定に必要な連続不変フレーム数（CORE-103で上書き可能）。
   final int stabilityFrames;
 
+  /// action完了後に待つ最小フレーム数。全画面の静止は待たない。
+  final int settleFrames;
+
   /// 待機のデフォルトタイムアウト（CORE-103で上書き可能）。
   final Duration defaultTimeout;
+
+  /// UIの状態更新が反映されるまで、指定数のフレーム終端を待つ。
+  Future<WaitResult> settle({int? frames, Duration? timeout}) =>
+      _waiter.waitForFrames(
+        frames ?? settleFrames,
+        timeout: timeout ?? defaultTimeout,
+      );
 
   /// 手順を命名して実行する。証跡の表示単位になる（CORE-006 / RPT-003）。
   ///
@@ -135,8 +148,24 @@ class EndevirTester {
       .where(_isActuallyVisible)
       .toList(growable: false);
 
+  List<Element> _resolveMounted(EndevirFinder finder) => finder
+      .resolve(_rootResolver())
+      .where(_isMountedAndTreeVisible)
+      .toList(growable: false);
+
   Element? _resolveSingleVisible(EndevirFinder finder) {
     final elements = _resolveVisible(finder);
+    if (elements.length > 1) {
+      throw AmbiguousFinderException(
+        finder.describe(),
+        elements.map(_describeCandidate).toList(growable: false),
+      );
+    }
+    return elements.firstOrNull;
+  }
+
+  Element? _resolveSingleMounted(EndevirFinder finder) {
+    final elements = _resolveMounted(finder);
     if (elements.length > 1) {
       throw AmbiguousFinderException(
         finder.describe(),
@@ -164,6 +193,23 @@ class EndevirTester {
   }
 
   bool _isActuallyVisible(Element element) {
+    if (!_isMountedAndTreeVisible(element)) return false;
+
+    final renderObject = element.renderObject;
+    if (renderObject is RenderBox) {
+      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+      if (view == null) return false;
+      final viewport =
+          Offset.zero & (view.physicalSize / view.devicePixelRatio);
+      final center = renderObject.localToGlobal(
+        renderObject.size.center(Offset.zero),
+      );
+      return viewport.contains(center);
+    }
+    return true;
+  }
+
+  bool _isMountedAndTreeVisible(Element element) {
     var hiddenByAncestor = false;
     bool isHidden(Widget widget) =>
         (widget is Offstage && widget.offstage) ||
@@ -190,14 +236,7 @@ class EndevirTester {
           renderObject.size.isEmpty) {
         return false;
       }
-      final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-      if (view == null) return false;
-      final viewport =
-          Offset.zero & (view.physicalSize / view.devicePixelRatio);
-      final center = renderObject.localToGlobal(
-        renderObject.size.center(Offset.zero),
-      );
-      return viewport.contains(center);
+      return true;
     }
     return renderObject?.attached ?? false;
   }
@@ -287,6 +326,7 @@ class EndevirElement {
       throw StateError('tap target vanished: ${_finder.describe()}');
     }
     await _tester._pointer.tapAt(center);
+    await _tester.settle(timeout: timeout);
   }
 
   /// 対象の中心から[delta]分だけドラッグする。
@@ -303,11 +343,66 @@ class EndevirElement {
       throw StateError('drag target vanished: ${_finder.describe()}');
     }
     await _tester._pointer.dragBy(center, delta);
+    await _tester.settle(timeout: timeout);
   }
 
   /// 対象が表示されるまで待つ。
   Future<WaitResult> waitUntilVisible({Duration? timeout}) =>
       _tester.expectVisible(_finder, timeout: timeout);
+
+  /// 最も近いScrollableを使って対象をviewport内へ移動する。
+  Future<void> ensureVisible({
+    Duration duration = const Duration(milliseconds: 200),
+    double alignment = 0,
+    Duration? timeout,
+  }) async {
+    Element? element;
+    await _tester._waiter.waitUntil(
+      () {
+        element = _tester._resolveSingleMounted(_finder);
+        return element != null;
+      },
+      timeout: timeout ?? _tester.defaultTimeout,
+      describe: 'mounted: ${_finder.describe()}',
+    );
+    await Scrollable.ensureVisible(
+      element!,
+      duration: duration,
+      alignment: alignment,
+    );
+    await waitUntilVisible(timeout: timeout);
+  }
+
+  /// 対象が表示されるまで指定Scrollableを段階的にドラッグする。
+  ///
+  /// 遅延構築されるListViewのように、対象がまだElementツリーに存在しない
+  /// 場合にも利用できる。
+  Future<void> scrollUntilVisible({
+    required Object scrollable,
+    Offset delta = const Offset(0, -300),
+    int maxScrolls = 20,
+    Duration? timeout,
+  }) async {
+    if (maxScrolls <= 0) {
+      throw ArgumentError.value(maxScrolls, 'maxScrolls', '1以上を指定してください');
+    }
+    final effectiveTimeout = timeout ?? _tester.defaultTimeout;
+    for (var attempt = 0; attempt <= maxScrolls; attempt++) {
+      if (_tester._resolveSingleVisible(_finder) != null) return;
+      if (_tester._resolveSingleMounted(_finder) != null) {
+        await ensureVisible(timeout: effectiveTimeout);
+        return;
+      }
+      if (attempt < maxScrolls) {
+        await _tester.$(scrollable).dragBy(delta, timeout: effectiveTimeout);
+      }
+    }
+    throw WaitTimeoutException(
+      'scroll failed: ${_finder.describe()}',
+      effectiveTimeout,
+      evaluations: maxScrolls + 1,
+    );
+  }
 
   /// このスコープの配下から検索するハンドルを返す（チェーン、CORE-002）。
   // ignore: non_constant_identifier_names
@@ -348,6 +443,7 @@ class EndevirElement {
         selection: TextSelection.collapsed(offset: text.length),
       ),
     );
+    await _tester.settle(timeout: timeout);
   }
 
   /// 要素自身または配下からEditableTextStateを探す。

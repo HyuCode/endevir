@@ -103,6 +103,73 @@ void main() {
     await expectation;
   });
 
+  testWidgets('ensureVisibleはScrollable内の画面外要素を表示領域へ移動する', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SingleChildScrollView(
+          child: Column(
+            children: [
+              for (var index = 0; index < 20; index++)
+                SizedBox(
+                  key: ValueKey('item_$index'),
+                  height: 100,
+                  child: Text('項目$index'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+    var done = false;
+
+    e
+        .$(const ValueKey('item_19'))
+        .ensureVisible(duration: Duration.zero)
+        .then((_) => done = true);
+    await tester.pump();
+    signal.tick();
+    await tester.pump();
+
+    expect(done, isTrue);
+    expect(find.byKey(const ValueKey('item_19')), findsOneWidget);
+  });
+
+  testWidgets('scrollUntilVisibleは遅延構築ListViewの対象まで段階的にスクロールする', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ListView.builder(
+          key: const ValueKey('lazy_list'),
+          itemCount: 30,
+          itemExtent: 100,
+          itemBuilder: (context, index) => SizedBox(
+            key: ValueKey('lazy_item_$index'),
+            child: Text('遅延項目$index'),
+          ),
+        ),
+      ),
+    );
+    final e = EndevirTester(
+      writer: writer,
+      testId: 1,
+      rootResolver: () => tester.binding.rootElement!,
+    );
+
+    final scrolling = e
+        .$(const ValueKey('lazy_item_29'))
+        .scrollUntilVisible(
+          scrollable: const ValueKey('lazy_list'),
+          delta: const Offset(0, -500),
+          maxScrolls: 10,
+        );
+    await tester.pumpAndSettle();
+    await scrolling;
+
+    expect(find.byKey(const ValueKey('lazy_item_29')), findsOneWidget);
+  });
+
   testWidgets('完全一致する表示要素が複数ある場合は候補つきで失敗する', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

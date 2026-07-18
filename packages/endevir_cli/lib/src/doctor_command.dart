@@ -3,9 +3,13 @@
 // ignore_for_file: avoid_print
 import 'dart:io';
 
+import 'package:args/args.dart';
+
 import 'flutter_cli.dart';
 
 enum DoctorStatus { ok, warn, fail }
+
+enum DoctorOverallStatus { ok, warnings, errors }
 
 class DoctorResult {
   const DoctorResult(this.name, this.status, this.message, {this.fixHint});
@@ -25,6 +29,44 @@ class DoctorResult {
     final hint = fixHint != null ? '\n    → $fixHint' : '';
     return '[$icon] $name: $message$hint';
   }
+}
+
+class DoctorSummary {
+  DoctorSummary(Iterable<DoctorResult> results)
+      : okCount = results.where((r) => r.status == DoctorStatus.ok).length,
+        warningCount =
+            results.where((r) => r.status == DoctorStatus.warn).length,
+        errorCount =
+            results.where((r) => r.status == DoctorStatus.fail).length;
+
+  final int okCount;
+  final int warningCount;
+  final int errorCount;
+
+  DoctorOverallStatus get status => errorCount > 0
+      ? DoctorOverallStatus.errors
+      : warningCount > 0
+          ? DoctorOverallStatus.warnings
+          : DoctorOverallStatus.ok;
+
+  /// Errors always fail with 1. Warnings are a successful diagnosis by
+  /// default, or exit 2 when a CI caller opts into strict warning handling.
+  int exitCode({bool strictWarnings = false}) => switch (status) {
+        DoctorOverallStatus.ok => 0,
+        DoctorOverallStatus.warnings => strictWarnings ? 2 : 0,
+        DoctorOverallStatus.errors => 1,
+      };
+
+  String format() => switch (status) {
+        DoctorOverallStatus.ok =>
+          '[endevir] doctor status: OK ($okCount checks passed)',
+        DoctorOverallStatus.warnings =>
+          '[endevir] doctor status: WARNING '
+              '(warnings: $warningCount, errors: $errorCount; success with warnings)',
+        DoctorOverallStatus.errors =>
+          '[endevir] doctor status: ERROR '
+              '(errors: $errorCount, warnings: $warningCount)',
+      };
 }
 
 /// プロジェクト構成のチェック（純粋なファイル検査、テスト可能）。
@@ -87,6 +129,17 @@ DoctorResult checkJavaVersion(String? javaVersionOutput) {
 }
 
 Future<int> runDoctorCommand(List<String> args) async {
+  final parser = ArgParser()
+    ..addFlag('strict',
+        negatable: false, help: '警告が1件以上ある場合に終了コード2を返します')
+    ..addFlag('help', abbr: 'h', negatable: false);
+  final options = parser.parse(args);
+  if (options['help'] as bool) {
+    print('usage: endevir doctor [--strict]');
+    print(parser.usage);
+    return 0;
+  }
+
   final results = <DoctorResult>[...runProjectChecks(Directory.current.path)];
 
   // ツールチェーン検査
@@ -103,13 +156,10 @@ Future<int> runDoctorCommand(List<String> args) async {
     print(result);
   }
 
-  final failed =
-      results.where((r) => r.status == DoctorStatus.fail).length;
+  final summary = DoctorSummary(results);
   print('');
-  print(failed == 0
-      ? '[endevir] 問題は見つかりませんでした'
-      : '[endevir] $failed 件の問題があります');
-  return failed == 0 ? 0 : 1;
+  print(summary.format());
+  return summary.exitCode(strictWarnings: options['strict'] as bool);
 }
 
 Future<DoctorResult> _checkCommand(
@@ -145,4 +195,3 @@ Future<String?> _javaVersion() async {
     return null;
   }
 }
-

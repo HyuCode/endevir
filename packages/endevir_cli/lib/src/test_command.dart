@@ -10,6 +10,7 @@ import 'package:args/args.dart';
 import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:yaml/yaml.dart';
 
+import 'device_preflight.dart';
 import 'enumerate.dart';
 import 'flutter_cli.dart';
 import 'init_command.dart' show writeBundle;
@@ -70,29 +71,53 @@ Future<int> runTestCommand(List<String> args) async {
         'in ${enumeration.files.length} files (bundle regenerated)');
   }
 
-  print('[endevir] build ($platform, target: $target)');
   final launcher = platform == 'ios'
       ? _IosSimulatorLauncher(device)
       : _AndroidLauncher(device);
-  await launcher.build(target);
-
-  print('[endevir] install & launch');
-  await launcher.installAndLaunch();
+  if (!await _runPreflight(platform, device, phase: 'before build')) {
+    return 1;
+  }
 
   try {
+    print('[endevir] build ($platform, target: $target)');
+    await launcher.build(target);
+
+    if (!await _runPreflight(platform, device, phase: 'after build')) {
+      return 1;
+    }
+
+    print('[endevir] install & launch');
+    await launcher.installAndLaunch();
+
     print('[endevir] connect to agent');
     final socket = await connectToAgent(host: launcher.agentHost);
-
-    final exitCode = await runAndCollect(
-      socket,
-      outDir: outDir,
-      only: options['only'] as String?,
-      config: loadRunConfig(),
-    );
-    await socket.close();
-    return exitCode;
+    try {
+      return await runAndCollect(
+        socket,
+        outDir: outDir,
+        only: options['only'] as String?,
+        config: loadRunConfig(),
+      );
+    } finally {
+      await socket.close();
+    }
   } finally {
     await launcher.terminate();
+  }
+}
+
+Future<bool> _runPreflight(
+  String platform,
+  String device, {
+  required String phase,
+}) async {
+  print('[endevir] device preflight ($phase)');
+  try {
+    await preflightDevice(platform: platform, device: device);
+    return true;
+  } on DevicePreflightException catch (error) {
+    stderr.writeln('[endevir] device preflight failed ($phase): $error');
+    return false;
   }
 }
 

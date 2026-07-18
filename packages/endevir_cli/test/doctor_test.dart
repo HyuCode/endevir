@@ -69,4 +69,39 @@ dependencies:
       expect(checkJavaVersion(null).status, DoctorStatus.warn);
     });
   });
+
+  group('doctor summary', () {
+    const ok = DoctorResult('ok', DoctorStatus.ok, 'ready');
+    const warning = DoctorResult('warning', DoctorStatus.warn, 'check this');
+    const error = DoctorResult('error', DoctorStatus.fail, 'broken');
+
+    test('警告なしの場合だけOKと表示する', () {
+      final summary = DoctorSummary([ok]);
+
+      expect(summary.status, DoctorOverallStatus.ok);
+      expect(summary.format(), contains('status: OK'));
+      expect(summary.exitCode(), 0);
+    });
+
+    test('warning-onlyはsuccess with warningsとして明示する', () {
+      final summary = DoctorSummary([ok, warning]);
+
+      expect(summary.status, DoctorOverallStatus.warnings);
+      expect(summary.format(), contains('status: WARNING'));
+      expect(summary.format(), contains('warnings: 1'));
+      expect(summary.format(), isNot(contains('問題は見つかりません')));
+      expect(summary.exitCode(), 0);
+      expect(summary.exitCode(strictWarnings: true), 2);
+    });
+
+    test('errorは警告の有無によらず終了コード1にする', () {
+      final summary = DoctorSummary([ok, warning, error]);
+
+      expect(summary.status, DoctorOverallStatus.errors);
+      expect(summary.format(), contains('status: ERROR'));
+      expect(summary.format(), contains('errors: 1, warnings: 1'));
+      expect(summary.exitCode(), 1);
+      expect(summary.exitCode(strictWarnings: true), 1);
+    });
+  });
 }

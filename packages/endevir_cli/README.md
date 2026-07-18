@@ -41,6 +41,10 @@ endevir doctor
 endevir test -p ios -d <simulator-udid>
 ```
 
+`endevir doctor` exits successfully when it finds only optional warnings and
+prints `doctor status: WARNING`. Use `endevir doctor --strict` in CI to return
+exit code 2 when any warning is present. Diagnostic errors always return 1.
+
 For Android, pass an adb serial instead:
 
 ```console

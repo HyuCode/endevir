@@ -45,6 +45,11 @@ endevir test -p ios -d <simulator-udid>
 prints `doctor status: WARNING`. Use `endevir doctor --strict` in CI to return
 exit code 2 when any warning is present. Diagnostic errors always return 1.
 
+`endevir test` uses distinct infrastructure exit codes after a successful
+build: 71 for install failure, 72 for launch failure, and 73 when the agent
+cannot be reached. Install and launch are retried once; agent startup retains
+its bounded 30-second connection retry.
+
 For Android, pass an adb serial instead:
 
 ```console

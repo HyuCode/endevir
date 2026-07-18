@@ -5,7 +5,6 @@ import 'package:flutter/material.dart'
     show
         ButtonStyleButton,
         Checkbox,
-        DropdownButton,
         FloatingActionButton,
         IconButton,
         InkResponse,
@@ -249,7 +248,6 @@ class EndevirTester {
       if (widget is Switch) return widget.onChanged != null;
       if (widget is Checkbox) return widget.onChanged != null;
       if (widget is Slider) return widget.onChanged != null;
-      if (widget is DropdownButton) return widget.onChanged != null;
       if (widget is TextField) return widget.enabled != false;
       if (widget is CupertinoButton) return widget.onPressed != null;
       if (widget is CupertinoSwitch) return widget.onChanged != null;

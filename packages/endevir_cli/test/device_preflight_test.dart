@@ -13,7 +13,12 @@ void main() {
       final output = jsonEncode({
         'devices': {
           'com.apple.CoreSimulator.SimRuntime.iOS-18-5': [
-            {'udid': 'SIM-1', 'name': 'iPhone 16', 'state': 'Booted'},
+            {
+              'udid': 'SIM-1',
+              'name': 'iPhone 16',
+              'state': 'Booted',
+              'dataPath': '/tmp/sim-1',
+            },
           ],
         },
       });
@@ -21,7 +26,10 @@ void main() {
       await preflightDevice(
         platform: 'ios',
         device: 'SIM-1',
-        commandRunner: (_, _) async => result(0, output),
+        commandRunner: (executable, _) async => executable == 'xcrun'
+            ? result(0, output)
+            : result(0, 'Filesystem 1024-blocks Used Available Capacity Mounted\n'
+                '/dev/disk 10000000 1000 9999000 1% /tmp\n'),
       );
     });
 
@@ -66,21 +74,62 @@ void main() {
         ),
       );
     });
+
+    test('空き容量不足をinsufficientSpaceとして報告する', () async {
+      final output = jsonEncode({
+        'devices': {
+          'runtime': [
+            {
+              'udid': 'SIM-1',
+              'state': 'Booted',
+              'dataPath': '/tmp/sim-1',
+            },
+          ],
+        },
+      });
+
+      await expectLater(
+        preflightDevice(
+          platform: 'ios',
+          device: 'SIM-1',
+          minimumFreeBytes: 1024 * 1024,
+          commandRunner: (executable, _) async => executable == 'xcrun'
+              ? result(0, output)
+              : result(0,
+                  'Filesystem 1024-blocks Used Available Capacity Mounted\n'
+                  '/dev/disk 10000 9500 500 95% /tmp\n'),
+        ),
+        throwsA(
+          isA<DevicePreflightException>().having(
+            (error) => error.failure,
+            'failure',
+            DevicePreflightFailure.insufficientSpace,
+          ),
+        ),
+      );
+    });
   });
 
   group('Android device preflight', () {
     test('device状態を受け入れ、対象serialを指定する', () async {
-      late List<String> arguments;
+      final calls = <List<String>>[];
       await preflightDevice(
         platform: 'android',
         device: 'emulator-5554',
         commandRunner: (_, args) async {
-          arguments = args;
-          return result(0, 'device\n');
+          calls.add(args);
+          return args.last == 'get-state'
+              ? result(0, 'device\n')
+              : result(0,
+                  'Filesystem 1024-blocks Used Available Capacity Mounted\n'
+                  '/dev/block 10000000 1000 9999000 1% /data\n');
         },
       );
 
-      expect(arguments, ['-s', 'emulator-5554', 'get-state']);
+      expect(calls, [
+        ['-s', 'emulator-5554', 'get-state'],
+        ['-s', 'emulator-5554', 'shell', 'df', '-Pk', '/data'],
+      ]);
     });
 
     test('offlineをnotReadyとして報告する', () async {
@@ -113,6 +162,25 @@ void main() {
             (error) => error.failure,
             'failure',
             DevicePreflightFailure.notFound,
+          ),
+        ),
+      );
+    });
+
+    test('解析できないdf出力をcommandFailedとして報告する', () async {
+      await expectLater(
+        preflightDevice(
+          platform: 'android',
+          device: 'emulator-5554',
+          commandRunner: (_, args) async => args.last == 'get-state'
+              ? result(0, 'device\n')
+              : result(0, 'unexpected output'),
+        ),
+        throwsA(
+          isA<DevicePreflightException>().having(
+            (error) => error.failure,
+            'failure',
+            DevicePreflightFailure.commandFailed,
           ),
         ),
       );

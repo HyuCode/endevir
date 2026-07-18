@@ -47,6 +47,8 @@ jobs:
         run: pnpm lint:md
       - name: Format check
         run: pnpm format:check
+      - name: Public docs boundary check
+        run: pnpm check:docs
       - name: Codegen up-to-date check
         run: |
           pnpm codegen

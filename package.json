@@ -8,6 +8,7 @@
     "format:check": "prettier --check \"**/*.{md,json,yaml,yml}\"",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
     "lint:md:fix": "markdownlint-cli2 --fix \"**/*.md\"",
+    "check:docs": "node scripts/check-docs.mjs",
     "codegen": "./scripts/codegen.sh"
   },
   "devDependencies": {

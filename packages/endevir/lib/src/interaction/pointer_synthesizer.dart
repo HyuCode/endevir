@@ -21,6 +21,36 @@ class PointerSynthesizer {
     );
   }
 
+  /// [position]を指定時間押し続ける。
+  Future<void> longPressAt(
+    Offset position, {
+    Duration duration = const Duration(milliseconds: 600),
+  }) async {
+    if (duration <= Duration.zero) {
+      throw ArgumentError.value(duration, 'duration', '0より大きい値が必要です');
+    }
+    final pointer = ++_nextPointerId;
+    final viewId =
+        GestureBinding.instance.platformDispatcher.implicitView!.viewId;
+    GestureBinding.instance.handlePointerEvent(
+      PointerDownEvent(
+        viewId: viewId,
+        pointer: pointer,
+        position: position,
+        buttons: kPrimaryButton,
+      ),
+    );
+    await Future<void>.delayed(duration);
+    GestureBinding.instance.handlePointerEvent(
+      PointerUpEvent(
+        viewId: viewId,
+        pointer: pointer,
+        timeStamp: duration,
+        position: position,
+      ),
+    );
+  }
+
   /// [start]から[delta]分だけドラッグする。
   ///
   /// 複数のmoveイベントをフレーム間隔で送ることで、Dismissibleなどの
@@ -70,6 +100,52 @@ class PointerSynthesizer {
         pointer: pointer,
         timeStamp: elapsed,
         position: previous,
+      ),
+    );
+  }
+
+  /// [start]から[delta]方向へ[duration]をかけてスワイプする。
+  Future<void> swipeBy(
+    Offset start,
+    Offset delta, {
+    Duration duration = const Duration(milliseconds: 250),
+    int steps = 12,
+  }) {
+    if (duration <= Duration.zero) {
+      throw ArgumentError.value(duration, 'duration', '0より大きい値が必要です');
+    }
+    if (steps < 1) throw ArgumentError.value(steps, 'steps', '1以上が必要です');
+    return dragBy(
+      start,
+      delta,
+      steps: steps,
+      stepDuration: Duration(
+        microseconds: (duration.inMicroseconds / steps).round(),
+      ),
+    );
+  }
+
+  /// [start]から[delta]方向へ指定速度でフリングする。
+  Future<void> flingBy(
+    Offset start,
+    Offset delta, {
+    double velocity = 1500,
+    int steps = 8,
+  }) {
+    if (delta == Offset.zero) {
+      throw ArgumentError.value(delta, 'delta', '0ではない移動量が必要です');
+    }
+    if (!velocity.isFinite || velocity <= 0) {
+      throw ArgumentError.value(velocity, 'velocity', '正の有限値が必要です');
+    }
+    if (steps < 1) throw ArgumentError.value(steps, 'steps', '1以上が必要です');
+    final totalDurationUs = (delta.distance / velocity * 1000000).round();
+    return dragBy(
+      start,
+      delta,
+      steps: steps,
+      stepDuration: Duration(
+        microseconds: (totalDurationUs / steps).round().clamp(1, 1000000),
       ),
     );
   }

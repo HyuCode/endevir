@@ -206,9 +206,16 @@ class EndevirTester {
   bool _isPointerActionable(Element element, Offset center) {
     if (!_isEnabledForPointerAction(element)) return false;
 
-    final renderObject = element.renderObject;
+    final targetRenderObjects = <RenderObject>{};
+    void collectRenderObjects(Element current) {
+      final renderObject = current.renderObject;
+      if (renderObject != null) targetRenderObjects.add(renderObject);
+      current.visitChildren(collectRenderObjects);
+    }
+
+    collectRenderObjects(element);
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-    if (renderObject is! RenderBox || view == null) return false;
+    if (targetRenderObjects.isEmpty || view == null) return false;
 
     final result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(result, center, view.viewId);
@@ -217,7 +224,7 @@ class EndevirTester {
       if (target is! RenderObject) return false;
       RenderObject? current = target;
       while (current != null) {
-        if (identical(current, renderObject)) return true;
+        if (targetRenderObjects.contains(current)) return true;
         final parent = current.parent;
         current = parent is RenderObject ? parent : null;
       }

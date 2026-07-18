@@ -228,6 +228,36 @@ void main() {
     await expectation;
   });
 
+  testWidgets('StatefulWidget配下の実ヒット対象をactionableと判定する', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DropdownButton<String>(
+            key: const ValueKey('dropdown'),
+            value: 'ja',
+            items: const [
+              DropdownMenuItem(value: 'ja', child: Text('日本語')),
+              DropdownMenuItem(value: 'en', child: Text('English')),
+            ],
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    var done = false;
+    e.$(#dropdown).tap().then((_) => done = true);
+    for (var i = 0; i < 5 && !done; i++) {
+      signal.tick();
+      await tester.pump();
+    }
+
+    expect(done, isTrue);
+    await tester.pumpAndSettle();
+    expect(find.text('English'), findsOneWidget);
+  });
+
   testWidgets('Opacityが0の対象はtapしない', (tester) async {
     var tapped = false;
     await tester.pumpWidget(

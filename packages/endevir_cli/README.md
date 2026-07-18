@@ -50,6 +50,10 @@ build: 71 for install failure, 72 for launch failure, and 73 when the agent
 cannot be reached. Install and launch are retried once; agent startup retains
 its bounded 30-second connection retry.
 
+Device preflight requires at least 1 GiB free in the iOS simulator data volume
+or Android `/data` volume. Endevir never boots or shuts down a device. Cleanup
+only stops an app and removes an adb forward after Endevir created them.
+
 For Android, pass an adb serial instead:
 
 ```console

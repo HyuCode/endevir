@@ -294,6 +294,7 @@ class _IosSimulatorLauncher extends _Launcher {
   final String udid;
   static const _appPath = 'build/ios/iphonesimulator/Runner.app';
   String? _bundleId;
+  bool _launchedByCli = false;
 
   @override
   Future<void> build(String target) =>
@@ -314,13 +315,15 @@ class _IosSimulatorLauncher extends _Launcher {
     await _run('xcrun', ['simctl', 'terminate', udid, _bundleId!],
         check: false);
     await _run('xcrun', ['simctl', 'launch', udid, _bundleId!]);
+    _launchedByCli = true;
   }
 
   @override
   Future<void> terminate() async {
-    if (_bundleId != null) {
+    if (_launchedByCli && _bundleId != null) {
       await _run('xcrun', ['simctl', 'terminate', udid, _bundleId!],
           check: false);
+      _launchedByCli = false;
     }
   }
 }
@@ -331,6 +334,8 @@ class _AndroidLauncher extends _Launcher {
   final String serial;
   static const _apkPath = 'build/app/outputs/flutter-apk/app-debug.apk';
   String? _packageName;
+  bool _launchedByCli = false;
+  bool _forwardedByCli = false;
 
   @override
   Future<void> build(String target) =>
@@ -350,19 +355,26 @@ class _AndroidLauncher extends _Launcher {
       '-s', serial, 'shell', 'am', 'start',
       '-n', '$_packageName/.MainActivity',
     ]);
+    _launchedByCli = true;
     await _run('adb',
         ['-s', serial, 'forward', 'tcp:$_agentPort', 'tcp:$_agentPort']);
+    _forwardedByCli = true;
   }
 
   @override
   Future<void> terminate() async {
-    if (_packageName != null) {
+    if (_launchedByCli && _packageName != null) {
       await _run(
           'adb', ['-s', serial, 'shell', 'am', 'force-stop', _packageName!],
           check: false);
+      _launchedByCli = false;
     }
-    await _run('adb', ['-s', serial, 'forward', '--remove', 'tcp:$_agentPort'],
-        check: false);
+    if (_forwardedByCli) {
+      await _run(
+          'adb', ['-s', serial, 'forward', '--remove', 'tcp:$_agentPort'],
+          check: false);
+      _forwardedByCli = false;
+    }
   }
 
   String _readApplicationId() {

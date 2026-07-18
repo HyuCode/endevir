@@ -82,4 +82,79 @@ void main() {
     expect(pointerMoves, 12);
     expect(distance, lessThan(-150));
   });
+
+  testWidgets('合成ポインタイベントで長押しできる', (tester) async {
+    var longPressed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onLongPress: () => longPressed = true,
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+
+    final synthesizer = PointerSynthesizer();
+    final pressing = synthesizer.longPressAt(
+      const Offset(300, 300),
+      duration: const Duration(milliseconds: 600),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await pressing;
+
+    expect(longPressed, isTrue);
+  });
+
+  testWidgets('swipeByは指定方向へポインタを移動する', (tester) async {
+    var distance = 0.0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: (details) => distance += details.delta.dy,
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+
+    final synthesizer = PointerSynthesizer();
+    final swiping = synthesizer.swipeBy(
+      const Offset(300, 500),
+      const Offset(0, -240),
+    );
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 21));
+    }
+    await swiping;
+
+    expect(distance, lessThan(-200));
+  });
+
+  testWidgets('flingByは速度を持つドラッグ終了を生成する', (tester) async {
+    Velocity? velocity;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanEnd: (details) => velocity = details.velocity,
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+
+    final synthesizer = PointerSynthesizer();
+    final flinging = synthesizer.flingBy(
+      const Offset(300, 500),
+      const Offset(0, -300),
+      velocity: 1800,
+    );
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 21));
+    }
+    await flinging;
+
+    expect(velocity, isNotNull);
+    expect(velocity!.pixelsPerSecond.dy, lessThan(-1000));
+  });
 }

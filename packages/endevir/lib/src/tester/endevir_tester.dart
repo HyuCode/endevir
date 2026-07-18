@@ -329,6 +329,16 @@ class EndevirElement {
     await _tester.settle(timeout: timeout);
   }
 
+  /// 対象の中心を長押しする。
+  Future<void> longPress({
+    Duration duration = const Duration(milliseconds: 600),
+    Duration? timeout,
+  }) async {
+    final center = await _stableCenter('longPress', timeout: timeout);
+    await _tester._pointer.longPressAt(center, duration: duration);
+    await _tester.settle(timeout: timeout);
+  }
+
   /// 対象の中心から[delta]分だけドラッグする。
   Future<void> dragBy(Offset delta, {Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
@@ -344,6 +354,43 @@ class EndevirElement {
     }
     await _tester._pointer.dragBy(center, delta);
     await _tester.settle(timeout: timeout);
+  }
+
+  /// 対象の中心から[delta]方向へスワイプする。
+  Future<void> swipe(
+    Offset delta, {
+    Duration duration = const Duration(milliseconds: 250),
+    Duration? timeout,
+  }) async {
+    final center = await _stableCenter('swipe', timeout: timeout);
+    await _tester._pointer.swipeBy(center, delta, duration: duration);
+    await _tester.settle(timeout: timeout);
+  }
+
+  /// 対象の中心から[delta]方向へ指定速度でフリングする。
+  Future<void> fling(
+    Offset delta, {
+    double velocity = 1500,
+    Duration? timeout,
+  }) async {
+    final center = await _stableCenter('fling', timeout: timeout);
+    await _tester._pointer.flingBy(center, delta, velocity: velocity);
+    await _tester.settle(timeout: timeout);
+  }
+
+  Future<Offset> _stableCenter(String action, {Duration? timeout}) async {
+    final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
+    await _tester._waiter.waitUntil(
+      () => tracker.update(_currentActionableCenter()),
+      timeout: timeout ?? _tester.defaultTimeout,
+      describe: '$action(stable): ${_finder.describe()}',
+      keepFramesFlowing: true,
+    );
+    final center = _currentActionableCenter();
+    if (center == null) {
+      throw StateError('$action target vanished: ${_finder.describe()}');
+    }
+    return center;
   }
 
   /// 対象が表示されるまで待つ。

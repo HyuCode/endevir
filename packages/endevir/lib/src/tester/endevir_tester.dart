@@ -186,27 +186,78 @@ class EndevirTester {
             renderObject.hasSize
         ? renderObject.localToGlobal(Offset.zero) & renderObject.size
         : null;
-    return '- ${widget.runtimeType}'
+    return '- path=${_elementPath(element)}'
         '${key == null ? '' : ' key=$key'}'
         '${text == null ? '' : ' text="$text"'}'
         '${rect == null ? '' : ' rect=$rect'}';
   }
 
+  String _elementPath(Element element) {
+    final segments = <String>[_elementSegment(element)];
+    element.visitAncestorElements((ancestor) {
+      segments.add(_elementSegment(ancestor));
+      return segments.length < 8;
+    });
+    return segments.reversed.join(' > ');
+  }
+
+  String _elementSegment(Element element) {
+    final key = element.widget.key;
+    return '${element.widget.runtimeType}${key == null ? '' : '[$key]'}';
+  }
+
   bool _isActuallyVisible(Element element) {
-    if (!_isMountedAndTreeVisible(element)) return false;
+    return _visibilityFailure(element) == null;
+  }
+
+  String? _visibilityFailure(Element element) {
+    String? hiddenReason(Widget widget) => switch (widget) {
+      final Offstage widget when widget.offstage => 'Offstage(offstage: true)',
+      final Visibility widget when !widget.visible =>
+        'Visibility(visible: false)',
+      final Opacity widget when widget.opacity == 0 => 'Opacity(opacity: 0)',
+      final AnimatedOpacity widget when widget.opacity == 0 =>
+        'AnimatedOpacity(opacity: 0)',
+      final FadeTransition widget when widget.opacity.value == 0 =>
+        'FadeTransition(opacity: 0)',
+      _ => null,
+    };
+
+    final ownReason = hiddenReason(element.widget);
+    if (ownReason != null) return 'hidden by $ownReason';
+    String? ancestorReason;
+    element.visitAncestorElements((ancestor) {
+      final reason = hiddenReason(ancestor.widget);
+      if (reason != null) {
+        ancestorReason = 'hidden by ancestor ${ancestor.widget.runtimeType}: $reason';
+        return false;
+      }
+      return true;
+    });
+    if (ancestorReason != null) return ancestorReason;
 
     final renderObject = element.renderObject;
     if (renderObject is RenderBox) {
+      if (!renderObject.attached) return 'render object is detached';
+      if (!renderObject.hasSize || renderObject.size.isEmpty) {
+        return 'render box has no non-empty size';
+      }
       final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-      if (view == null) return false;
+      if (view == null) return 'no implicit Flutter view is available';
       final viewport =
           Offset.zero & (view.physicalSize / view.devicePixelRatio);
       final center = renderObject.localToGlobal(
         renderObject.size.center(Offset.zero),
       );
-      return viewport.contains(center);
+      if (!viewport.contains(center)) {
+        return 'center $center is outside viewport $viewport';
+      }
+      return null;
     }
-    return true;
+    if (renderObject == null || !renderObject.attached) {
+      return 'render object is missing or detached';
+    }
+    return null;
   }
 
   bool _isMountedAndTreeVisible(Element element) {
@@ -241,8 +292,10 @@ class EndevirTester {
     return renderObject?.attached ?? false;
   }
 
-  bool _isPointerActionable(Element element, Offset center) {
-    if (!_isEnabledForPointerAction(element)) return false;
+  String? _pointerActionabilityFailure(Element element, Offset center) {
+    if (!_isEnabledForPointerAction(element)) {
+      return 'target or ancestor is disabled or ignores pointer events';
+    }
 
     final targetRenderObjects = <RenderObject>{};
     void collectRenderObjects(Element current) {
@@ -253,11 +306,12 @@ class EndevirTester {
 
     collectRenderObjects(element);
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-    if (targetRenderObjects.isEmpty || view == null) return false;
+    if (targetRenderObjects.isEmpty) return 'target has no render objects';
+    if (view == null) return 'no implicit Flutter view is available';
 
     final result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(result, center, view.viewId);
-    return result.path.any((entry) {
+    final hit = result.path.any((entry) {
       final target = entry.target;
       if (target is! RenderObject) return false;
       RenderObject? current = target;
@@ -268,6 +322,9 @@ class EndevirTester {
       }
       return false;
     });
+    return hit
+        ? null
+        : 'center $center is clipped, blocked by another element, or not hit-testable';
   }
 
   bool _isEnabledForPointerAction(Element element) {
@@ -309,17 +366,16 @@ class EndevirElement {
 
   final EndevirFinder _finder;
   final EndevirTester _tester;
+  String _lastActionabilityReason = 'target was not evaluated';
+  List<String> _lastCandidates = const [];
 
   /// 対象の出現と位置安定（actionability check、ADR-003）を待ってタップする。
   Future<void> tap({Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
-    await _tester._waiter.waitUntil(
-      () => tracker.update(_currentActionableCenter()),
-      timeout: timeout ?? _tester.defaultTimeout,
-      describe: 'tap(stable): ${_finder.describe()}',
-      // 安定判定は連続フレームでの評価が前提（静止画面ではフレームが
-      // 流れないため、評価ごとに次フレームを要求する）
-      keepFramesFlowing: true,
+    await _waitForStableAction(
+      'tap',
+      tracker,
+      timeout: timeout,
     );
     final center = _currentActionableCenter();
     if (center == null) {
@@ -342,12 +398,7 @@ class EndevirElement {
   /// 対象の中心から[delta]分だけドラッグする。
   Future<void> dragBy(Offset delta, {Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
-    await _tester._waiter.waitUntil(
-      () => tracker.update(_currentActionableCenter()),
-      timeout: timeout ?? _tester.defaultTimeout,
-      describe: 'drag(stable): ${_finder.describe()}',
-      keepFramesFlowing: true,
-    );
+    await _waitForStableAction('drag', tracker, timeout: timeout);
     final center = _currentActionableCenter();
     if (center == null) {
       throw StateError('drag target vanished: ${_finder.describe()}');
@@ -380,12 +431,7 @@ class EndevirElement {
 
   Future<Offset> _stableCenter(String action, {Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
-    await _tester._waiter.waitUntil(
-      () => tracker.update(_currentActionableCenter()),
-      timeout: timeout ?? _tester.defaultTimeout,
-      describe: '$action(stable): ${_finder.describe()}',
-      keepFramesFlowing: true,
-    );
+    await _waitForStableAction(action, tracker, timeout: timeout);
     final center = _currentActionableCenter();
     if (center == null) {
       throw StateError('$action target vanished: ${_finder.describe()}');
@@ -464,11 +510,11 @@ class EndevirElement {
   /// （WidgetTester非依存）。
   Future<void> enterText(String text, {Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
-    await _tester._waiter.waitUntil(
-      () => tracker.update(_currentActionableCenter(forTextInput: true)),
-      timeout: timeout ?? _tester.defaultTimeout,
-      describe: 'enterText(stable): ${_finder.describe()}',
-      keepFramesFlowing: true,
+    await _waitForStableAction(
+      'enterText',
+      tracker,
+      timeout: timeout,
+      forTextInput: true,
     );
 
     final element = _tester._resolveSingleVisible(_finder);
@@ -510,22 +556,94 @@ class EndevirElement {
   }
 
   Offset? _currentActionableCenter({bool forTextInput = false}) {
-    final element = _tester._resolveSingleVisible(_finder);
-    if (element == null) return null;
+    final matches = _finder.resolve(_tester._rootResolver());
+    _lastCandidates = matches
+        .map(_tester._describeCandidate)
+        .toList(growable: false);
+    if (matches.isEmpty) {
+      _lastActionabilityReason = 'no elements matched the finder';
+      return null;
+    }
+    final visible = matches
+        .where((element) => _tester._visibilityFailure(element) == null)
+        .toList(growable: false);
+    if (visible.length > 1) {
+      throw AmbiguousFinderException(
+        _finder.describe(),
+        visible.map(_tester._describeCandidate).toList(growable: false),
+      );
+    }
+    if (visible.isEmpty) {
+      _lastCandidates = matches
+          .map((element) =>
+              '${_tester._describeCandidate(element)} '
+              'reason=${_tester._visibilityFailure(element)}')
+          .toList(growable: false);
+      _lastActionabilityReason = 'all matched elements are not visible';
+      return null;
+    }
+    final element = visible.single;
     final renderObject = element.renderObject;
-    if (renderObject is! RenderBox || !renderObject.attached) return null;
+    if (renderObject is! RenderBox || !renderObject.attached) {
+      _lastActionabilityReason = 'target has no attached RenderBox';
+      return null;
+    }
     final center = renderObject.localToGlobal(
       renderObject.size.center(Offset.zero),
     );
-    if (!_tester._isPointerActionable(element, center)) return null;
+    final pointerFailure =
+        _tester._pointerActionabilityFailure(element, center);
+    if (pointerFailure != null) {
+      _lastActionabilityReason = pointerFailure;
+      return null;
+    }
     if (forTextInput) {
       final editable = _findEditableText(element);
-      if (editable == null ||
-          editable.widget.readOnly ||
-          !editable.widget.focusNode.canRequestFocus) {
+      if (editable == null) {
+        _lastActionabilityReason = 'target has no EditableText descendant';
+        return null;
+      }
+      if (editable.widget.readOnly) {
+        _lastActionabilityReason = 'EditableText is read-only';
+        return null;
+      }
+      if (!editable.widget.focusNode.canRequestFocus) {
+        _lastActionabilityReason = 'EditableText cannot request focus';
         return null;
       }
     }
+    _lastActionabilityReason =
+        'position did not remain stable for ${_tester.stabilityFrames} frames';
     return center;
+  }
+
+  Future<void> _waitForStableAction(
+    String action,
+    StabilityTracker tracker, {
+    Duration? timeout,
+    bool forTextInput = false,
+  }) async {
+    final effectiveTimeout = timeout ?? _tester.defaultTimeout;
+    try {
+      await _tester._waiter.waitUntil(
+        () => tracker.update(
+          _currentActionableCenter(forTextInput: forTextInput),
+        ),
+        timeout: effectiveTimeout,
+        describe: '$action(stable): ${_finder.describe()}',
+        // 安定判定は連続フレームでの評価が前提（静止画面ではフレームが
+        // 流れないため、評価ごとに次フレームを要求する）
+        keepFramesFlowing: true,
+      );
+    } on WaitTimeoutException catch (error) {
+      throw ActionabilityTimeoutException(
+        action: action,
+        finder: _finder.describe(),
+        reason: _lastActionabilityReason,
+        candidates: _lastCandidates,
+        duration: effectiveTimeout,
+        evaluations: error.evaluations,
+      );
+    }
   }
 }

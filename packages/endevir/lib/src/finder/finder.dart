@@ -34,6 +34,13 @@ abstract class EndevirFinder {
   /// Semanticsウィジェットのラベルで特定するファインダー。
   factory EndevirFinder.semanticsLabel(String label) = SemanticsLabelFinder;
 
+  /// Semanticsウィジェットの安定識別子で特定するファインダー。
+  ///
+  /// [Semantics.identifier]はOSのaccessibility identifier / resource-idに
+  /// 公開されるため、Maestro等の外部E2Eとセレクタ契約を共有できる。
+  factory EndevirFinder.semanticsIdentifier(String identifier) =
+      SemanticsIdentifierFinder;
+
   /// Textウィジェットを部分一致で特定する。
   factory EndevirFinder.textContains(String text) = TextContainsFinder;
 
@@ -156,6 +163,22 @@ class SemanticsLabelFinder extends EndevirFinder {
 
   @override
   String describe() => 'semanticsLabel: "$label"';
+}
+
+/// Semanticsウィジェットの安定識別子によるファインダー。
+class SemanticsIdentifierFinder extends EndevirFinder {
+  const SemanticsIdentifierFinder(this.identifier);
+
+  final String identifier;
+
+  @override
+  bool matches(Element element) {
+    final widget = element.widget;
+    return widget is Semantics && widget.properties.identifier == identifier;
+  }
+
+  @override
+  String describe() => 'semanticsIdentifier: "$identifier"';
 }
 
 /// スコープつきファインダー（親の配下だけを検索する）。

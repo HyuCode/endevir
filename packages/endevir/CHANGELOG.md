@@ -4,3 +4,4 @@
 - Event-driven waits and position-stability checks.
 - Screenshot evidence and step-correlated logs.
 - Test registry, retries, runner, and in-app agent transport.
+- Semantics identifier finder and runtime stable-selector audit.

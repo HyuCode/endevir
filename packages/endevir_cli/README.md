@@ -41,6 +41,18 @@ endevir doctor
 endevir test -p ios -d <simulator-udid>
 ```
 
+By default, `init` adds the published packages from pub.dev. For monorepo
+development or an unreleased revision, select exactly one alternative source:
+
+```console
+endevir init --endevir-path /absolute/path/to/endevir
+endevir init --endevir-git https://github.com/HyuCode/endevir.git --endevir-ref <commit>
+```
+
+Path and Git modes source `endevir`, `endevir_cli`, and the temporary
+`endevir_reporter` override from the same monorepo revision. `--endevir-ref`
+accepts a branch, tag, or commit and is valid only with `--endevir-git`.
+
 `endevir doctor` exits successfully when it finds only optional warnings and
 prints `doctor status: WARNING`. Use `endevir doctor --strict` in CI to return
 exit code 2 when any warning is present. Diagnostic errors always return 1.

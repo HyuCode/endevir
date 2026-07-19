@@ -20,6 +20,60 @@ dependencies:
 
   tearDown(() => tempDir.deleteSync(recursive: true));
 
+  group('buildDependencyPlan', () {
+    test('既定はpub.devの通常依存とdev依存を追加する', () {
+      final plan = buildDependencyPlan();
+
+      expect(plan.source, EndevirDependencySource.hosted);
+      expect(plan.specs, ['endevir', 'dev:endevir_cli']);
+      expect(plan.description, 'pub.dev');
+    });
+
+    test('pathはmonorepo内3パッケージを同じ絶対pathへ揃える', () {
+      final plan = buildDependencyPlan(path: tempDir.path);
+
+      expect(plan.source, EndevirDependencySource.path);
+      expect(plan.specs, [
+        'endevir:{"path":"${tempDir.path}/packages/endevir"}',
+        'dev:endevir_cli:{"path":"${tempDir.path}/packages/endevir_cli"}',
+        'override:endevir_reporter:{"path":"${tempDir.path}/packages/endevir_reporter"}',
+      ]);
+    });
+
+    test('gitはurl/ref/subdirectoryを3パッケージへ揃える', () {
+      final plan = buildDependencyPlan(
+        git: 'https://github.com/HyuCode/endevir.git',
+        ref: 'abc123',
+      );
+
+      expect(plan.source, EndevirDependencySource.git);
+      for (final spec in plan.specs) {
+        expect(spec, contains('"url":"https://github.com/HyuCode/endevir.git"'));
+        expect(spec, contains('"ref":"abc123"'));
+      }
+      expect(plan.specs[0], contains('"path":"packages/endevir"'));
+      expect(plan.specs[1], contains('"path":"packages/endevir_cli"'));
+      expect(plan.specs[2], contains('"path":"packages/endevir_reporter"'));
+    });
+
+    test('git refは省略できる', () {
+      final plan = buildDependencyPlan(git: 'git@example.com:repo.git');
+
+      expect(plan.specs.every((spec) => !spec.contains('"ref"')), isTrue);
+    });
+
+    test('pathとgitの同時指定、gitなしrefを拒否する', () {
+      expect(
+        () => buildDependencyPlan(path: '.', git: 'repo.git'),
+        throwsArgumentError,
+      );
+      expect(
+        () => buildDependencyPlan(ref: 'main'),
+        throwsArgumentError,
+      );
+    });
+  });
+
   group('scaffoldProject', () {
     test('バンドル方式の雛形一式（bootstrap+サンプル+バンドル+設定）を生成する', () {
       final created = scaffoldProject(tempDir.path);

@@ -12,6 +12,7 @@ rerunning Endevir E2E tests in Flutter applications.
 | ------------------------ | ----------------------------------------------------------- |
 | `endevir init`           | Add an idempotent test scaffold and configuration           |
 | `endevir doctor`         | Diagnose the Flutter, Android, iOS, and project environment |
+| `endevir build`          | Build and fingerprint a reusable test application           |
 | `endevir test`           | Build, launch, run tests, and collect the evidence trace    |
 | `endevir develop`        | Watch test files and rerun through Flutter hot restart      |
 | `endevir native android` | Generate or run the Android instrumentation test mapping    |
@@ -78,6 +79,28 @@ For Android, pass an adb serial instead:
 ```console
 endevir test -p android -d <adb-serial>
 ```
+
+## Reusing a build
+
+Separate the expensive Flutter build from repeated device runs:
+
+```console
+endevir build -p ios
+endevir test -p ios -d <simulator-udid> --reuse-build
+```
+
+`endevir build` regenerates the test bundle, builds the application, and writes
+an input fingerprint to `.endevir/builds/<platform>.json`. `--reuse-build`
+skips Flutter/Xcode/Gradle only when all of the following still match:
+
+- platform and test entrypoint
+- application source, test source, assets, dependency lock, and native files
+- the expected `.app` directory or APK
+
+If any input changed, Endevir rejects the artifact with exit code 66 and asks
+for a fresh `endevir build`. It never silently executes a stale test bundle.
+The regular `endevir test` command still performs a build by default and also
+records a reusable manifest for a later run.
 
 Use `endevir <command> --help` for command-specific options. Test output,
 traces, screenshots, and the self-contained HTML report are stored in

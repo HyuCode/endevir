@@ -36,6 +36,16 @@ $ dart run endevir_cli:endevir_cli test -p ios -d <simulator-udid>
 [endevir] report: .endevir/report.html
 ```
 
+For repeated device runs, build once and reuse the validated artifact:
+
+```console
+dart run endevir_cli:endevir_cli build -p ios
+dart run endevir_cli:endevir_cli test -p ios -d <simulator-udid> --reuse-build
+```
+
+Endevir fingerprints source, tests, assets, dependencies, and native project
+inputs. A stale or missing artifact is rejected instead of being run silently.
+
 - タップはイベント駆動の自動待機+位置安定チェック（exists≠actionable対策）つき
 - 実行は全ステップがtrace（JSONL）として記録され、自己完結HTMLレポートが生成される
 - iOSシミュレータ / Androidエミュレータ・実機に同一コマンドで対応

@@ -23,6 +23,7 @@ const publicDocuments = new Set([
   "docs/01-adr/05-static-test-enumeration.md",
   "docs/01-adr/06-native-test-mapping.md",
   "docs/01-adr/07-monorepo-tooling.md",
+  "docs/01-adr/08-test-mode-boundary.md",
   "docs/02-design/01-trace-schema.md",
   "docs/03-benchmarks/01-mvp-benchmarks.md",
   "docs/04-integration/01-cloud.md",

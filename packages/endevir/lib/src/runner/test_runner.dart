@@ -33,10 +33,10 @@ class EndevirTestRunner {
     required EndevirTester Function(int testId, int attempt) testerFactory,
     Future<void> Function()? beforeEach,
     LogCorrelator? logCorrelator,
-  })  : _writer = writer,
-        _testerFactory = testerFactory,
-        _beforeEach = beforeEach,
-        _logCorrelator = logCorrelator;
+  }) : _writer = writer,
+       _testerFactory = testerFactory,
+       _beforeEach = beforeEach,
+       _logCorrelator = logCorrelator;
 
   final TraceWriter _writer;
   final EndevirTester Function(int testId, int attempt) _testerFactory;
@@ -73,7 +73,14 @@ class EndevirTestRunner {
         final maxAttempts = (entry.retries ?? retries) + 1;
         for (var attempt = 1; attempt <= maxAttempts; attempt++) {
           await _beforeEach?.call();
-          final testId = _writer.testStart(entry.name, attempt: attempt);
+          final testId = _writer.testStart(
+            entry.name,
+            attempt: attempt,
+            mode: switch (entry.mode) {
+              EndevirTestMode.inProcess => TraceTestMode.IN_PROCESS,
+              EndevirTestMode.userPath => TraceTestMode.USER_PATH,
+            },
+          );
           try {
             await _runBody(entry, testId, attempt);
             _writer.testEnd(testId, TraceStatus.PASSED, attempt: attempt);
@@ -81,8 +88,12 @@ class EndevirTestRunner {
             if (attempt > 1) flaky++;
             break;
           } catch (e) {
-            _writer.testEnd(testId, TraceStatus.FAILED,
-                error: '$e', attempt: attempt);
+            _writer.testEnd(
+              testId,
+              TraceStatus.FAILED,
+              error: '$e',
+              attempt: attempt,
+            );
             if (attempt == maxAttempts) failed++;
           }
         }

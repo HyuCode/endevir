@@ -18,32 +18,43 @@ String buildHtmlReport(
     ..writeln('<html lang="ja">')
     ..writeln('<head>')
     ..writeln('<meta charset="utf-8">')
-    ..writeln('<meta name="viewport" content="width=device-width, initial-scale=1">')
+    ..writeln(
+      '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    )
     ..writeln('<title>Endevir Report - ${_escape(model.runId)}</title>')
     ..writeln('<style>$_css</style>')
     ..writeln('</head>')
     ..writeln('<body>')
     ..writeln('<header>')
     ..writeln('<h1>Endevir Report</h1>')
-    ..writeln('<p class="meta">run: ${_escape(model.runId)} / '
-        'platform: ${_escape(model.platform)}</p>')
-    ..writeln('<p class="summary">'
-        '<span class="count">${model.total} tests</span> '
-        '<span class="badge passed">${model.passed} passed</span> '
-        '<span class="badge failed-badge">${model.failed} failed</span>'
-        '</p>')
+    ..writeln(
+      '<p class="meta">run: ${_escape(model.runId)} / '
+      'platform: ${_escape(model.platform)}</p>',
+    )
+    ..writeln(
+      '<p class="summary">'
+      '<span class="count">${model.total} tests</span> '
+      '<span class="badge passed">${model.passed} passed</span> '
+      '<span class="badge failed-badge">${model.failed} failed</span>'
+      '</p>',
+    )
     ..writeln('</header>');
 
   for (final test in model.tests) {
     final status = _statusName(test.status);
     buffer
-      ..writeln('<details class="test $status" '
-          '${status == 'failed' ? 'open' : ''}>')
-      ..writeln('<summary>'
-          '<span class="status $status">$status</span> '
-          '${_escape(test.name)} '
-          '<span class="duration">${_formatUs(test.durationUs)}</span>'
-          '</summary>');
+      ..writeln(
+        '<details class="test $status" '
+        '${status == 'failed' ? 'open' : ''}>',
+      )
+      ..writeln(
+        '<summary>'
+        '<span class="status $status">$status</span> '
+        '${_escape(test.name)} '
+        '${test.mode == null ? '' : '<span class="test-mode">${_testModeName(test.mode!)}</span> '}'
+        '<span class="duration">${_formatUs(test.durationUs)}</span>'
+        '</summary>',
+      );
     if (test.error != null) {
       buffer.writeln('<pre class="error">${_escape(test.error!)}</pre>');
     }
@@ -55,31 +66,39 @@ String buildHtmlReport(
         final stepStatus = _statusName(step.status);
         buffer
           ..writeln('<div class="step-card $stepStatus">')
-          ..writeln('<div class="step-head">'
-              '<span class="step-index">${index + 1}</span> '
-              '<span class="status $stepStatus">$stepStatus</span> '
-              '<span class="duration">${_formatUs(step.durationUs)}</span>'
-              '</div>')
+          ..writeln(
+            '<div class="step-head">'
+            '<span class="step-index">${index + 1}</span> '
+            '<span class="status $stepStatus">$stepStatus</span> '
+            '<span class="duration">${_formatUs(step.durationUs)}</span>'
+            '</div>',
+          )
           ..writeln('<p class="step-name">${_escape(step.name)}</p>');
         if (step.screenshot != null) {
           final bytes = resolveScreenshot?.call(step.screenshot!);
           if (bytes != null) {
-            buffer.writeln('<figure class="screenshot">'
-                '<img alt="${_escape(step.name)}" loading="lazy" '
-                'src="data:image/png;base64,${base64Encode(bytes)}">'
-                '</figure>');
+            buffer.writeln(
+              '<figure class="screenshot">'
+              '<img alt="${_escape(step.name)}" loading="lazy" '
+              'src="data:image/png;base64,${base64Encode(bytes)}">'
+              '</figure>',
+            );
           } else {
-            buffer.writeln('<p class="screenshot">📸 '
-                '${_escape(step.screenshot!)}</p>');
+            buffer.writeln(
+              '<p class="screenshot">📸 '
+              '${_escape(step.screenshot!)}</p>',
+            );
           }
         }
         if (step.error != null) {
           buffer.writeln('<pre class="error">${_escape(step.error!)}</pre>');
         }
         for (final log in step.logs) {
-          buffer.writeln('<p class="log">'
-              '<span class="source">[${log.source?.name ?? '-'}]</span> '
-              '${_escape(log.message)}</p>');
+          buffer.writeln(
+            '<p class="log">'
+            '<span class="source">[${log.source?.name ?? '-'}]</span> '
+            '${_escape(log.message)}</p>',
+          );
         }
         buffer.writeln('</div>');
       }
@@ -95,14 +114,19 @@ String buildHtmlReport(
 }
 
 String _statusName(TraceStatus? status) => switch (status) {
-      TraceStatus.PASSED => 'passed',
-      TraceStatus.FAILED => 'failed',
-      TraceStatus.SKIPPED => 'skipped',
-      null => 'unknown',
-    };
+  TraceStatus.PASSED => 'passed',
+  TraceStatus.FAILED => 'failed',
+  TraceStatus.SKIPPED => 'skipped',
+  null => 'unknown',
+};
 
 String _formatUs(int? us) =>
     us == null ? '' : '${(us / 1000).toStringAsFixed(0)}ms';
+
+String _testModeName(TraceTestMode mode) => switch (mode) {
+  TraceTestMode.IN_PROCESS => 'in-process',
+  TraceTestMode.USER_PATH => 'user-path',
+};
 
 String _escape(String text) => const HtmlEscape().convert(text);
 
@@ -124,6 +148,8 @@ header h1 { margin: 0 0 4px; font-size: 22px; }
 .status.passed { background: #d9f2e3; color: #116633; }
 .status.failed { background: #fde2e2; color: #a11a1a; }
 .status.unknown, .status.skipped { background: #eee; color: #666; }
+.test-mode { display: inline-block; color: #45536a; background: #e9eef6;
+  border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
 .duration { color: #999; font-size: 12px; font-weight: 400; }
 .steps-strip { display: flex; gap: 12px; overflow-x: auto;
   margin: 12px 0 6px; padding-bottom: 8px; align-items: flex-start; }

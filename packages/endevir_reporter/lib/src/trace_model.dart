@@ -23,7 +23,11 @@ class TraceModel {
           runId = event.runId ?? '';
           platform = event.platform ?? '';
         case TraceEventType.TEST_START:
-          final test = TestModel(id: event.testId!, name: event.name ?? '');
+          final test = TestModel(
+            id: event.testId!,
+            name: event.name ?? '',
+            mode: event.testMode,
+          );
           tests.add(test);
           testsById[test.id] = test;
         case TraceEventType.TEST_END:
@@ -67,17 +71,16 @@ class TraceModel {
   final List<TestModel> tests;
 
   int get total => tests.length;
-  int get passed =>
-      tests.where((t) => t.status == TraceStatus.PASSED).length;
-  int get failed =>
-      tests.where((t) => t.status == TraceStatus.FAILED).length;
+  int get passed => tests.where((t) => t.status == TraceStatus.PASSED).length;
+  int get failed => tests.where((t) => t.status == TraceStatus.FAILED).length;
 }
 
 class TestModel {
-  TestModel({required this.id, required this.name});
+  TestModel({required this.id, required this.name, this.mode});
 
   final int id;
   final String name;
+  final TraceTestMode? mode;
   TraceStatus? status;
   String? error;
   int? durationUs;

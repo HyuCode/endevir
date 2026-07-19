@@ -58,6 +58,9 @@ class TraceEvent {
     ///テストの連番ID（testStart/testEnd、および所属イベントの相関キー）
     int? testId;
     
+    ///テストが保証する境界（testStart）。inProcessはアプリ内部への直接アクセスを許容し、userPathは公開UI操作だけでシナリオを進める
+    TraceTestMode? testMode;
+    
     ///Unixエポックからのマイクロ秒（全ログ・イベント共通の時刻軸）
     int timestampUs;
     
@@ -79,6 +82,7 @@ class TraceEvent {
         this.status,
         this.stepId,
         this.testId,
+        this.testMode,
         required this.timestampUs,
         required this.type,
     });
@@ -98,6 +102,7 @@ class TraceEvent {
         status: traceStatusValues.map[json["status"]],
         stepId: json["stepId"],
         testId: json["testId"],
+        testMode: traceTestModeValues.map[json["testMode"]],
         timestampUs: json["timestampUs"],
         type: traceEventTypeValues.map[json["type"]]!,
     );
@@ -117,6 +122,7 @@ class TraceEvent {
         "status": traceStatusValues.reverse[status],
         "stepId": stepId,
         "testId": testId,
+        "testMode": traceTestModeValues.reverse[testMode],
         "timestampUs": timestampUs,
         "type": traceEventTypeValues.reverse[type],
     };
@@ -150,6 +156,18 @@ final traceStatusValues = EnumValues({
     "failed": TraceStatus.FAILED,
     "passed": TraceStatus.PASSED,
     "skipped": TraceStatus.SKIPPED
+});
+
+
+///テストが保証する境界（testStart）。inProcessはアプリ内部への直接アクセスを許容し、userPathは公開UI操作だけでシナリオを進める
+enum TraceTestMode {
+    IN_PROCESS,
+    USER_PATH
+}
+
+final traceTestModeValues = EnumValues({
+    "inProcess": TraceTestMode.IN_PROCESS,
+    "userPath": TraceTestMode.USER_PATH
 });
 
 

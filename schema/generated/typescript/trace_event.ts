@@ -71,6 +71,10 @@ export interface TraceEvent {
      */
     testId?: number;
     /**
+     * テストが保証する境界（testStart）。inProcessはアプリ内部への直接アクセスを許容し、userPathは公開UI操作だけでシナリオを進める
+     */
+    testMode?: TraceTestMode;
+    /**
      * Unixエポックからのマイクロ秒（全ログ・イベント共通の時刻軸）
      */
     timestampUs: number;
@@ -97,6 +101,14 @@ export enum TraceStatus {
     Failed = "failed",
     Passed = "passed",
     Skipped = "skipped",
+}
+
+/**
+ * テストが保証する境界（testStart）。inProcessはアプリ内部への直接アクセスを許容し、userPathは公開UI操作だけでシナリオを進める
+ */
+export enum TraceTestMode {
+    InProcess = "inProcess",
+    UserPath = "userPath",
 }
 
 /**
@@ -292,6 +304,7 @@ const typeMap: any = {
         { json: "status", js: "status", typ: u(undefined, r("TraceStatus")) },
         { json: "stepId", js: "stepId", typ: u(undefined, 0) },
         { json: "testId", js: "testId", typ: u(undefined, 0) },
+        { json: "testMode", js: "testMode", typ: u(undefined, r("TraceTestMode")) },
         { json: "timestampUs", js: "timestampUs", typ: 0 },
         { json: "type", js: "type", typ: r("TraceEventType") },
     ], false),
@@ -305,6 +318,10 @@ const typeMap: any = {
         "failed",
         "passed",
         "skipped",
+    ],
+    "TraceTestMode": [
+        "inProcess",
+        "userPath",
     ],
     "TraceEventType": [
         "log",

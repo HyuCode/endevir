@@ -7,14 +7,18 @@ void main() {
     var timeUs = 0;
     final writer = TraceWriter(lines.add, nowUs: () => timeUs += 1000);
     writer.runStart(runId: 'run-1', platform: 'ios');
-    final testId = writer.testStart(testName);
+    final testId = writer.testStart(testName, mode: TraceTestMode.USER_PATH);
     final stepId = writer.stepStart('手順A', testId: testId);
-    writer.stepEnd(stepId,
-        error == null ? TraceStatus.PASSED : TraceStatus.FAILED,
-        error: error);
-    writer.testEnd(testId,
-        error == null ? TraceStatus.PASSED : TraceStatus.FAILED,
-        error: error);
+    writer.stepEnd(
+      stepId,
+      error == null ? TraceStatus.PASSED : TraceStatus.FAILED,
+      error: error,
+    );
+    writer.testEnd(
+      testId,
+      error == null ? TraceStatus.PASSED : TraceStatus.FAILED,
+      error: error,
+    );
     writer.runEnd();
     return TraceModel.fromEvents(lines.map(traceEventFromJson).toList());
   }
@@ -28,6 +32,7 @@ void main() {
       expect(html, contains('手順A'));
       expect(html, contains('passed'));
       expect(html, contains('run-1'));
+      expect(html, contains('user-path'));
       // 外部リソース参照なし（自己完結、RPT-201）
       expect(html, isNot(contains('http://')));
       expect(html, isNot(contains('https://')));
@@ -59,8 +64,9 @@ void main() {
       writer.stepEnd(stepId, TraceStatus.PASSED, screenshot: 'shots/1.png');
       writer.testEnd(testId, TraceStatus.PASSED);
       writer.runEnd();
-      final withShot =
-          TraceModel.fromEvents(lines.map(traceEventFromJson).toList());
+      final withShot = TraceModel.fromEvents(
+        lines.map(traceEventFromJson).toList(),
+      );
 
       final html = buildHtmlReport(
         withShot,
@@ -82,8 +88,9 @@ void main() {
       writer.stepEnd(stepId, TraceStatus.PASSED, screenshot: 'shots/1.png');
       writer.testEnd(testId, TraceStatus.PASSED);
       writer.runEnd();
-      final withShot =
-          TraceModel.fromEvents(lines.map(traceEventFromJson).toList());
+      final withShot = TraceModel.fromEvents(
+        lines.map(traceEventFromJson).toList(),
+      );
 
       final html = buildHtmlReport(withShot);
 

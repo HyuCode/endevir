@@ -19,3 +19,4 @@ OSS実装に関わる重要な技術判断を番号付きで記録する。
 | [ADR-005](./05-static-test-enumeration.md) | テスト列挙は構文解析による静的抽出で行い、ドライランを廃する                | Accepted   |
 | [ADR-006](./06-native-test-mapping.md)     | Android写像はマニフェスト駆動のParameterized JUnit + エージェント実行で行う | Accepted   |
 | [ADR-007](./07-monorepo-tooling.md)        | モノレポはDart pub workspacesで管理する（melosは導入しない）                | Accepted   |
+| [ADR-008](./08-test-mode-boundary.md)      | テスト契約と実行エンジンを分離し、user-pathを明示分類する                   | Accepted   |

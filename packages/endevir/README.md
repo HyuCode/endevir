@@ -40,15 +40,26 @@ The initializer creates `endevir_test/main_test.dart`, a smoke test, and
 import 'package:endevir/endevir.dart';
 
 void main() {
-  endevirTest('signs in', (e) async {
-    await e.step('Enter credentials', () async {
-      await e.$(#emailField).enterText('dev@example.com');
-      await e.$(#submitButton).tap();
-    });
-    await e.expectVisible('Welcome');
-  });
+  endevirTest(
+    'signs in',
+    (e) async {
+      await e.step('Enter credentials', () async {
+        await e.$(#emailField).enterText('dev@example.com');
+        await e.$(#submitButton).tap();
+      });
+      await e.expectVisible('Welcome');
+    },
+    mode: EndevirTestMode.userPath,
+  );
 }
 ```
+
+Tests default to `EndevirTestMode.inProcess`, which permits direct access to
+application state, services, and callbacks. Mark a test as `userPath` only when
+the scenario advances exclusively through public UI operations. Both modes
+currently run inside the Flutter application process; `userPath` is not an
+external black-box driver and does not support system UI such as permission
+dialogs or share sheets.
 
 Register test files through the generated bundle in
 `endevir_test/main_test.dart`, then execute them on a simulator or emulator:

@@ -241,7 +241,13 @@ void main() {
 
     final expectation = expectLater(
       e.$(#clipped).tap(timeout: const Duration(milliseconds: 50)),
-      throwsA(isA<WaitTimeoutException>()),
+      throwsA(
+        isA<ActionabilityTimeoutException>().having(
+          (error) => error.reason,
+          'reason',
+          contains('clipped, blocked by another element'),
+        ),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 100));
     await expectation;
@@ -268,7 +274,13 @@ void main() {
 
     final expectation = expectLater(
       e.$(#covered).tap(timeout: const Duration(milliseconds: 50)),
-      throwsA(isA<WaitTimeoutException>()),
+      throwsA(
+        isA<ActionabilityTimeoutException>().having(
+          (error) => error.reason,
+          'reason',
+          contains('blocked by another element'),
+        ),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 100));
     await expectation;
@@ -289,7 +301,19 @@ void main() {
 
     final expectation = expectLater(
       e.$(#disabled).tap(timeout: const Duration(milliseconds: 50)),
-      throwsA(isA<WaitTimeoutException>()),
+      throwsA(
+        isA<ActionabilityTimeoutException>()
+            .having(
+              (error) => error.reason,
+              'reason',
+              contains('disabled or ignores pointer events'),
+            )
+            .having(
+              (error) => error.candidates.single,
+              'candidate',
+              allOf(contains('path='), contains('disabled'), contains('rect=')),
+            ),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 100));
     await expectation;
@@ -343,7 +367,19 @@ void main() {
 
     final expectation = expectLater(
       e.$(#transparent).tap(timeout: const Duration(milliseconds: 50)),
-      throwsA(isA<WaitTimeoutException>()),
+      throwsA(
+        isA<ActionabilityTimeoutException>()
+            .having(
+              (error) => error.reason,
+              'reason',
+              'all matched elements are not visible',
+            )
+            .having(
+              (error) => error.candidates.single,
+              'candidate',
+              contains('hidden by ancestor Opacity'),
+            ),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 100));
     await expectation;
@@ -419,8 +455,61 @@ void main() {
     });
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(error, isA<WaitTimeoutException>());
+    expect(error, isA<ActionabilityTimeoutException>());
     expect('$error', contains('missing'));
+    expect('$error', contains('reason: no elements matched the finder'));
+    expect('$error', contains('candidates: none'));
+  });
+
+  testWidgets('actionability理由と候補をtrace・HTML reportへ保存する', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ElevatedButton(
+          key: ValueKey('trace_disabled'),
+          onPressed: null,
+          child: Text('操作不可'),
+        ),
+      ),
+    );
+    writer.runStart(runId: 'diagnostic-run', platform: 'ios');
+    final testId = writer.testStart('診断できる');
+    final e = EndevirTester(
+      writer: writer,
+      testId: testId,
+      frameSignal: signal,
+      rootResolver: () => tester.binding.rootElement!,
+    );
+
+    final operation = e.step(
+      '無効ボタンをタップ',
+      () => e.$(#trace_disabled).tap(
+        timeout: const Duration(milliseconds: 50),
+      ),
+    );
+    final expectation = expectLater(
+      operation,
+      throwsA(isA<ActionabilityTimeoutException>()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await expectation;
+
+    final events = lines.map(traceEventFromJson).toList();
+    final stepEnd = events.firstWhere(
+      (event) => event.type == TraceEventType.STEP_END,
+    );
+    expect(stepEnd.error, contains('reason:'));
+    expect(stepEnd.error, contains('disabled or ignores pointer events'));
+    expect(stepEnd.error, contains('path='));
+    expect(stepEnd.error, contains('trace_disabled'));
+
+    writer.testEnd(testId, TraceStatus.FAILED, error: stepEnd.error);
+    writer.runEnd();
+    final html = buildHtmlReport(
+      TraceModel.fromEvents(lines.map(traceEventFromJson).toList()),
+    );
+    expect(html, contains('disabled or ignores pointer events'));
+    expect(html, contains('trace_disabled'));
+    expect(html, contains('path='));
   });
 }
 

@@ -1,6 +1,7 @@
 // `endevir init`: プロジェクトへのEndevir導入（CLI-001）。
 // 雛形生成は冪等（既存ファイルを上書きしない）。
 // ignore_for_file: avoid_print
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
@@ -26,6 +27,71 @@ class InitResult {
   final List<String> created;
   final bool rolledBack;
   final String? error;
+}
+
+enum EndevirDependencySource { hosted, path, git }
+
+class EndevirDependencyPlan {
+  const EndevirDependencyPlan({
+    required this.source,
+    required this.specs,
+    required this.description,
+  });
+
+  final EndevirDependencySource source;
+  final List<String> specs;
+  final String description;
+}
+
+EndevirDependencyPlan buildDependencyPlan({
+  String? path,
+  String? git,
+  String? ref,
+}) {
+  if (path != null && git != null) {
+    throw ArgumentError('`--endevir-path` and `--endevir-git` are exclusive');
+  }
+  if (ref != null && git == null) {
+    throw ArgumentError('`--endevir-ref` requires `--endevir-git`');
+  }
+  if (path != null) {
+    final root = Directory(path).absolute.path;
+    String descriptor(String package) => jsonEncode({
+          'path': '$root/packages/$package',
+        });
+    return EndevirDependencyPlan(
+      source: EndevirDependencySource.path,
+      specs: [
+        'endevir:${descriptor('endevir')}',
+        'dev:endevir_cli:${descriptor('endevir_cli')}',
+        'override:endevir_reporter:${descriptor('endevir_reporter')}',
+      ],
+      description: 'local path ($root)',
+    );
+  }
+  if (git != null) {
+    String descriptor(String package) => jsonEncode({
+          'git': {
+            'url': git,
+            'path': 'packages/$package',
+            'ref': ?ref,
+          },
+        });
+    return EndevirDependencyPlan(
+      source: EndevirDependencySource.git,
+      specs: [
+        'endevir:${descriptor('endevir')}',
+        'dev:endevir_cli:${descriptor('endevir_cli')}',
+        'override:endevir_reporter:${descriptor('endevir_reporter')}',
+      ],
+      description: 'git ($git${ref == null ? '' : ', ref: $ref'})',
+    );
+  }
+  return const EndevirDependencyPlan(
+    source: EndevirDependencySource.hosted,
+    specs: ['endevir', 'dev:endevir_cli'],
+    description: 'pub.dev',
+  );
 }
 
 const _transactionFiles = [
@@ -201,29 +267,42 @@ Future<ProcessResult> _runInitProcess(
 Future<int> runInitCommand(List<String> args) async {
   final parser = ArgParser()
     ..addOption('endevir-path',
-        help: 'Endevirモノレポへのパス（pub.dev公開前のpath依存用）')
+        help: 'ローカルEndevirモノレポへのパス')
+    ..addOption('endevir-git', help: 'EndevirモノレポのGit URL')
+    ..addOption('endevir-ref', help: '--endevir-gitで使用するbranch/tag/commit')
     ..addFlag('help', abbr: 'h', negatable: false);
   final options = parser.parse(args);
   if (options['help'] as bool) {
-    print('usage: endevir init [--endevir-path <path>]');
+    print('usage: endevir init [--endevir-path <path> | '
+        '--endevir-git <url> [--endevir-ref <ref>]]');
     print(parser.usage);
     return 0;
   }
 
-  // 依存追加（pub.dev公開前はpath依存）
-  final endevirPath = options['endevir-path'] as String?;
-  final specs = endevirPath != null
-      ? [
-          'endevir:{"path":"$endevirPath/packages/endevir"}',
-          'dev:endevir_cli:{"path":"$endevirPath/packages/endevir_cli"}',
-          // 未公開の推移的依存はoverrideで解決する（pub.dev公開後は不要）
-          'override:endevir_reporter:{"path":"$endevirPath/packages/endevir_reporter"}',
-        ]
-      : ['endevir', 'dev:endevir_cli'];
+  final EndevirDependencyPlan plan;
+  try {
+    plan = buildDependencyPlan(
+      path: options['endevir-path'] as String?,
+      git: options['endevir-git'] as String?,
+      ref: options['endevir-ref'] as String?,
+    );
+  } on ArgumentError catch (error) {
+    stderr.writeln('error: ${error.message}');
+    return 64;
+  }
+  if (plan.source == EndevirDependencySource.path) {
+    final root = options['endevir-path'] as String;
+    if (!Directory(root).existsSync()) {
+      stderr.writeln('error: Endevirモノレポが見つかりません: $root');
+      return 64;
+    }
+  }
+
+  print('[endevir] dependency source: ${plan.description}');
   print('[endevir] add dependencies: endevir, endevir_cli');
   final result = await initializeProject(
     projectRoot: Directory.current.path,
-    dependencySpecs: specs,
+    dependencySpecs: plan.specs,
     flutter: flutterExecutable(),
     flutterPrefix: flutterArgPrefix(),
   );

@@ -57,6 +57,50 @@ void main() {
     expect(done, isTrue);
   });
 
+  testWidgets('expectNotVisibleは対象が存在しない場合と非表示の場合に成功する', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Column(
+          children: [
+            Text('表示中'),
+            Offstage(offstage: true, child: Text('非表示')),
+          ],
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    await expectLater(e.expectNotVisible('存在しない'), completes);
+    await expectLater(e.expectNotVisible('非表示'), completes);
+  });
+
+  testWidgets('expectSelectedはSemanticsの選択状態を検証する', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(home: Semantics(selected: true, child: const Text('毎日'))),
+    );
+    final e = makeTester(tester);
+
+    await expectLater(e.$('毎日').expectSelected(), completes);
+  });
+
+  testWidgets('expectToggledはSwitchListTileの公開状態を検証する', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SwitchListTile(
+            key: const ValueKey('soundSwitch'),
+            value: false,
+            onChanged: (_) {},
+            title: const Text('Sound'),
+          ),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    await expectLater(e.$(#soundSwitch).expectToggled(false), completes);
+  });
+
   testWidgets('expectVisibleはOffstageの古い画面を表示中と判定しない', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -482,9 +526,7 @@ void main() {
 
     final operation = e.step(
       '無効ボタンをタップ',
-      () => e.$(#trace_disabled).tap(
-        timeout: const Duration(milliseconds: 50),
-      ),
+      () => e.$(#trace_disabled).tap(timeout: const Duration(milliseconds: 50)),
     );
     final expectation = expectLater(
       operation,

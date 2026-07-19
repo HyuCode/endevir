@@ -1,6 +1,7 @@
 import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:flutter/cupertino.dart' show CupertinoButton, CupertinoSwitch;
 import 'package:flutter/gestures.dart' show HitTestResult;
+import 'package:flutter/semantics.dart' show SemanticsProperties;
 import 'package:flutter/material.dart'
     show
         ButtonStyleButton,
@@ -9,6 +10,7 @@ import 'package:flutter/material.dart'
         IconButton,
         Slider,
         Switch,
+        SwitchListTile,
         TextField;
 import 'package:flutter/widgets.dart';
 
@@ -143,6 +145,19 @@ class EndevirTester {
     );
   }
 
+  /// 対象が表示されなくなるまで待つ。
+  ///
+  /// 対象がElementツリーから消えた場合と、Offstage等で実際に見えなくなった場合の
+  /// どちらも成功とする。
+  Future<WaitResult> expectNotVisible(Object target, {Duration? timeout}) {
+    final finder = EndevirFinder.from(target);
+    return _waiter.waitUntil(
+      () => _resolveVisible(finder).isEmpty,
+      timeout: timeout ?? defaultTimeout,
+      describe: 'not visible: ${finder.describe()}',
+    );
+  }
+
   List<Element> _resolveVisible(EndevirFinder finder) => finder
       .resolve(_rootResolver())
       .where(_isActuallyVisible)
@@ -229,7 +244,8 @@ class EndevirTester {
     element.visitAncestorElements((ancestor) {
       final reason = hiddenReason(ancestor.widget);
       if (reason != null) {
-        ancestorReason = 'hidden by ancestor ${ancestor.widget.runtimeType}: $reason';
+        ancestorReason =
+            'hidden by ancestor ${ancestor.widget.runtimeType}: $reason';
         return false;
       }
       return true;
@@ -372,11 +388,7 @@ class EndevirElement {
   /// 対象の出現と位置安定（actionability check、ADR-003）を待ってタップする。
   Future<void> tap({Duration? timeout}) async {
     final tracker = StabilityTracker(requiredFrames: _tester.stabilityFrames);
-    await _waitForStableAction(
-      'tap',
-      tracker,
-      timeout: timeout,
-    );
+    await _waitForStableAction('tap', tracker, timeout: timeout);
     final center = _currentActionableCenter();
     if (center == null) {
       throw StateError('tap target vanished: ${_finder.describe()}');
@@ -442,6 +454,84 @@ class EndevirElement {
   /// 対象が表示されるまで待つ。
   Future<WaitResult> waitUntilVisible({Duration? timeout}) =>
       _tester.expectVisible(_finder, timeout: timeout);
+
+  /// 対象がアクセシビリティ上の選択状態になるまで待つ。
+  ///
+  /// SegmentedButtonやTab等、利用者に表示される選択状態の検証に使う。
+  Future<WaitResult> expectSelected({bool value = true, Duration? timeout}) =>
+      _waitForBooleanState(
+        stateName: 'selected',
+        expected: value,
+        readSemantics: (properties) => properties.selected,
+        timeout: timeout,
+      );
+
+  /// 対象がアクセシビリティ上のon/off状態になるまで待つ。
+  ///
+  /// Switch系の公開UI状態を検証する。SwitchListTileは同等の公開valueへ
+  /// フォールバックし、将来の外部ドライバーではsemanticsへ写像できる契約とする。
+  Future<WaitResult> expectToggled(bool value, {Duration? timeout}) =>
+      _waitForBooleanState(
+        stateName: 'toggled',
+        expected: value,
+        readSemantics: (properties) => properties.toggled,
+        readWidget: (widget) => switch (widget) {
+          final Switch widget => widget.value,
+          final SwitchListTile widget => widget.value,
+          final CupertinoSwitch widget => widget.value,
+          _ => null,
+        },
+        timeout: timeout,
+      );
+
+  Future<WaitResult> _waitForBooleanState({
+    required String stateName,
+    required bool expected,
+    required bool? Function(SemanticsProperties properties) readSemantics,
+    bool? Function(Widget widget)? readWidget,
+    Duration? timeout,
+  }) => _tester._waiter.waitUntil(
+    () {
+      final element = _tester._resolveSingleVisible(_finder);
+      if (element == null) return false;
+      return _readBooleanState(element, readSemantics, readWidget) == expected;
+    },
+    timeout: timeout ?? _tester.defaultTimeout,
+    describe: '$stateName=$expected: ${_finder.describe()}',
+  );
+
+  bool? _readBooleanState(
+    Element element,
+    bool? Function(SemanticsProperties properties) readSemantics,
+    bool? Function(Widget widget)? readWidget,
+  ) {
+    bool? read(Element candidate) {
+      final widgetValue = readWidget?.call(candidate.widget);
+      if (widgetValue != null) return widgetValue;
+      final widget = candidate.widget;
+      return widget is Semantics ? readSemantics(widget.properties) : null;
+    }
+
+    final ownValue = read(element);
+    if (ownValue != null) return ownValue;
+
+    bool? ancestorValue;
+    element.visitAncestorElements((ancestor) {
+      ancestorValue = read(ancestor);
+      return ancestorValue == null;
+    });
+    if (ancestorValue != null) return ancestorValue;
+
+    bool? descendantValue;
+    void visit(Element descendant) {
+      if (descendantValue != null) return;
+      descendantValue = read(descendant);
+      if (descendantValue == null) descendant.visitChildren(visit);
+    }
+
+    element.visitChildren(visit);
+    return descendantValue;
+  }
 
   /// 最も近いScrollableを使って対象をviewport内へ移動する。
   Future<void> ensureVisible({
@@ -575,9 +665,11 @@ class EndevirElement {
     }
     if (visible.isEmpty) {
       _lastCandidates = matches
-          .map((element) =>
-              '${_tester._describeCandidate(element)} '
-              'reason=${_tester._visibilityFailure(element)}')
+          .map(
+            (element) =>
+                '${_tester._describeCandidate(element)} '
+                'reason=${_tester._visibilityFailure(element)}',
+          )
           .toList(growable: false);
       _lastActionabilityReason = 'all matched elements are not visible';
       return null;
@@ -591,8 +683,10 @@ class EndevirElement {
     final center = renderObject.localToGlobal(
       renderObject.size.center(Offset.zero),
     );
-    final pointerFailure =
-        _tester._pointerActionabilityFailure(element, center);
+    final pointerFailure = _tester._pointerActionabilityFailure(
+      element,
+      center,
+    );
     if (pointerFailure != null) {
       _lastActionabilityReason = pointerFailure;
       return null;

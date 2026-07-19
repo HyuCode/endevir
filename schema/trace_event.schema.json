@@ -44,6 +44,12 @@
       "description": "テスト名またはステップ名（testStart/stepStartで記録）",
       "type": "string"
     },
+    "testMode": {
+      "description": "テストが保証する境界（testStart）。inProcessはアプリ内部への直接アクセスを許容し、userPathは公開UI操作だけでシナリオを進める",
+      "type": "string",
+      "enum": ["inProcess", "userPath"],
+      "title": "TraceTestMode"
+    },
     "status": {
       "description": "終了ステータス（stepEnd/testEnd）",
       "type": "string",

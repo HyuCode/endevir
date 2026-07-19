@@ -9,7 +9,7 @@ void main() {
     final writer = TraceWriter(lines.add, nowUs: () => timeUs += 1000);
 
     writer.runStart(runId: 'run-1', platform: 'ios');
-    final test1 = writer.testStart('ログインできる');
+    final test1 = writer.testStart('ログインできる', mode: TraceTestMode.USER_PATH);
     final step1 = writer.stepStart('入力する', testId: test1);
     writer.log(LogSource.DART, 'typing', stepId: step1);
     writer.stepEnd(step1, TraceStatus.PASSED, screenshot: 'shots/1.png');
@@ -33,6 +33,7 @@ void main() {
 
       final test1 = model.tests[0];
       expect(test1.name, 'ログインできる');
+      expect(test1.mode, TraceTestMode.USER_PATH);
       expect(test1.status, TraceStatus.PASSED);
       expect(test1.steps, hasLength(1));
       expect(test1.steps[0].name, '入力する');

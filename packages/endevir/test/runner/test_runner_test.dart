@@ -22,10 +22,10 @@ void main() {
   });
 
   EndevirTestRunner runner() => EndevirTestRunner(
-        writer: writer,
-        testerFactory: (testId, attempt) =>
-            EndevirTester(writer: writer, testId: testId, attempt: attempt),
-      );
+    writer: writer,
+    testerFactory: (testId, attempt) =>
+        EndevirTester(writer: writer, testId: testId, attempt: attempt),
+  );
 
   group('EndevirTestRegistry', () {
     test('endevirTestは登録のみ行い、実行はしない', () {
@@ -34,7 +34,14 @@ void main() {
 
       expect(registry.entries, hasLength(1));
       expect(registry.entries.single.name, 't1');
+      expect(registry.entries.single.mode, EndevirTestMode.inProcess);
       expect(executed, isFalse);
+    });
+
+    test('userPathを明示して登録できる', () {
+      registry.add('UIだけで操作する', (e) async {}, mode: EndevirTestMode.userPath);
+
+      expect(registry.entries.single.mode, EndevirTestMode.userPath);
     });
 
     test('groupは名前を「group > test」形式で修飾する', () {
@@ -43,8 +50,7 @@ void main() {
       });
       registry.add('単独', (e) async {});
 
-      expect(registry.entries.map((e) => e.name),
-          ['ログイン > 成功する', '単独']);
+      expect(registry.entries.map((e) => e.name), ['ログイン > 成功する', '単独']);
     });
 
     test('同名テストの登録はエラーになる', () {
@@ -57,8 +63,11 @@ void main() {
     test('runStart/testStart/testEnd/runEndが記録され、成功はpassedになる', () async {
       registry.add('成功するテスト', (e) async {});
 
-      final summary = await runner()
-          .run(registry, runId: 'run-1', platform: 'android');
+      final summary = await runner().run(
+        registry,
+        runId: 'run-1',
+        platform: 'android',
+      );
 
       final events = parsed();
       expect(events.map((e) => e.type).toList(), [
@@ -72,12 +81,26 @@ void main() {
       expect(summary.failed, 0);
     });
 
+    test('宣言したテストモードがtestStartへ記録される', () async {
+      registry.add('ユーザーパス', (e) async {}, mode: EndevirTestMode.userPath);
+
+      await runner().run(registry, runId: 'r', platform: 'android');
+
+      final start = parsed().firstWhere(
+        (event) => event.type == TraceEventType.TEST_START,
+      );
+      expect(start.testMode, TraceTestMode.USER_PATH);
+    });
+
     test('本文が例外を投げたテストはfailedとしてエラー詳細つきで記録される', () async {
       registry.add('落ちるテスト', (e) async => throw StateError('boom'));
       registry.add('後続テスト', (e) async {});
 
-      final summary = await runner()
-          .run(registry, runId: 'run-1', platform: 'android');
+      final summary = await runner().run(
+        registry,
+        runId: 'run-1',
+        platform: 'android',
+      );
 
       final ends = parsed()
           .where((e) => e.type == TraceEventType.TEST_END)
@@ -102,14 +125,15 @@ void main() {
       final testId = events
           .firstWhere((e) => e.type == TraceEventType.TEST_START)
           .testId;
-      final stepStarts =
-          events.where((e) => e.type == TraceEventType.STEP_START).toList();
+      final stepStarts = events
+          .where((e) => e.type == TraceEventType.STEP_START)
+          .toList();
       expect(stepStarts.map((e) => e.name), ['手順1', '手順2']);
       expect(stepStarts.map((e) => e.testId), everyElement(testId));
       expect(
-        events.where((e) => e.type == TraceEventType.STEP_END).map(
-              (e) => e.status,
-            ),
+        events
+            .where((e) => e.type == TraceEventType.STEP_END)
+            .map((e) => e.status),
         everyElement(TraceStatus.PASSED),
       );
     });
@@ -122,12 +146,14 @@ void main() {
       await runner().run(registry, runId: 'r', platform: 'ios');
 
       final events = parsed();
-      final stepEnd =
-          events.firstWhere((e) => e.type == TraceEventType.STEP_END);
+      final stepEnd = events.firstWhere(
+        (e) => e.type == TraceEventType.STEP_END,
+      );
       expect(stepEnd.status, TraceStatus.FAILED);
       expect(stepEnd.error, contains('step boom'));
-      final testEnd =
-          events.firstWhere((e) => e.type == TraceEventType.TEST_END);
+      final testEnd = events.firstWhere(
+        (e) => e.type == TraceEventType.TEST_END,
+      );
       expect(testEnd.status, TraceStatus.FAILED);
     });
 
@@ -138,8 +164,12 @@ void main() {
         if (attempts < 2) throw StateError('flake');
       });
 
-      final summary = await runner().run(registry,
-          runId: 'r', platform: 'android', retries: 2);
+      final summary = await runner().run(
+        registry,
+        runId: 'r',
+        platform: 'android',
+        retries: 2,
+      );
 
       expect(attempts, 2);
       expect(summary.passed, 1);
@@ -147,8 +177,9 @@ void main() {
       expect(summary.flaky, 1);
 
       // trace: attempt=1がfailed、attempt=2がpassedとして両方記録される
-      final ends =
-          parsed().where((e) => e.type == TraceEventType.TEST_END).toList();
+      final ends = parsed()
+          .where((e) => e.type == TraceEventType.TEST_END)
+          .toList();
       expect(ends, hasLength(2));
       expect(ends[0].attempt, 1);
       expect(ends[0].status, TraceStatus.FAILED);
@@ -159,13 +190,18 @@ void main() {
     test('リトライを使い切って失敗したテストはfailedになる', () async {
       registry.add('常に失敗する', (e) async => throw StateError('boom'));
 
-      final summary = await runner().run(registry,
-          runId: 'r', platform: 'android', retries: 1);
+      final summary = await runner().run(
+        registry,
+        runId: 'r',
+        platform: 'android',
+        retries: 1,
+      );
 
       expect(summary.failed, 1);
       expect(summary.flaky, 0);
-      final ends =
-          parsed().where((e) => e.type == TraceEventType.TEST_END).toList();
+      final ends = parsed()
+          .where((e) => e.type == TraceEventType.TEST_END)
+          .toList();
       expect(ends, hasLength(2), reason: '初回+リトライ1回');
       expect(ends.map((e) => e.status), everyElement(TraceStatus.FAILED));
     });
@@ -211,14 +247,17 @@ void main() {
       expect(calls, ['reset', 't1', 'reset', 't2']);
     });
 
-    test('対象名フィルタを指定すると一致するテストのみ実行される（ネイティブ写像用）',
-        () async {
+    test('対象名フィルタを指定すると一致するテストのみ実行される（ネイティブ写像用）', () async {
       var ran = <String>[];
       registry.add('a', (e) async => ran.add('a'));
       registry.add('b', (e) async => ran.add('b'));
 
-      final summary = await runner()
-          .run(registry, runId: 'r', platform: 'android', only: 'b');
+      final summary = await runner().run(
+        registry,
+        runId: 'r',
+        platform: 'android',
+        only: 'b',
+      );
 
       expect(ran, ['b']);
       expect(summary.total, 1);
@@ -249,8 +288,7 @@ void main() {
 
       await correlatedRunner().run(registry, runId: 'r', platform: 'ios');
 
-      final logs =
-          parsed().where((e) => e.type == TraceEventType.LOG).toList();
+      final logs = parsed().where((e) => e.type == TraceEventType.LOG).toList();
       expect(logs, hasLength(1));
       expect(logs.single.source, LogSource.DART);
       expect(logs.single.message, 'こんにちはログ');
@@ -270,8 +308,7 @@ void main() {
       final stepId = events
           .firstWhere((e) => e.type == TraceEventType.STEP_START)
           .stepId;
-      final logs =
-          events.where((e) => e.type == TraceEventType.LOG).toList();
+      final logs = events.where((e) => e.type == TraceEventType.LOG).toList();
       expect(logs[0].message, 'ステップ外');
       expect(logs[0].stepId, isNull);
       expect(logs[1].message, '手順Aの中');
@@ -295,8 +332,7 @@ void main() {
           .where((e) => e.type == TraceEventType.STEP_START)
           .map((e) => e.stepId)
           .toList(); // [外側, 内側]
-      final logs =
-          events.where((e) => e.type == TraceEventType.LOG).toList();
+      final logs = events.where((e) => e.type == TraceEventType.LOG).toList();
       expect(logs[0].message, '内側ログ');
       expect(logs[0].stepId, stepIds[1]);
       expect(logs[1].message, '外側ログ');

@@ -9,11 +9,12 @@ import 'package:args/args.dart';
 import 'enumerate.dart';
 import 'flutter_cli.dart';
 
-typedef InitProcessRunner = Future<ProcessResult> Function(
-  String executable,
-  List<String> arguments, {
-  String? workingDirectory,
-});
+typedef InitProcessRunner =
+    Future<ProcessResult> Function(
+      String executable,
+      List<String> arguments, {
+      String? workingDirectory,
+    });
 
 class InitResult {
   const InitResult({
@@ -56,9 +57,8 @@ EndevirDependencyPlan buildDependencyPlan({
   }
   if (path != null) {
     final root = Directory(path).absolute.path;
-    String descriptor(String package) => jsonEncode({
-          'path': '$root/packages/$package',
-        });
+    String descriptor(String package) =>
+        jsonEncode({'path': '$root/packages/$package'});
     return EndevirDependencyPlan(
       source: EndevirDependencySource.path,
       specs: [
@@ -71,12 +71,8 @@ EndevirDependencyPlan buildDependencyPlan({
   }
   if (git != null) {
     String descriptor(String package) => jsonEncode({
-          'git': {
-            'url': git,
-            'path': 'packages/$package',
-            'ref': ?ref,
-          },
-        });
+      'git': {'url': git, 'path': 'packages/$package', 'ref': ?ref},
+    });
     return EndevirDependencyPlan(
       source: EndevirDependencySource.git,
       specs: [
@@ -150,12 +146,13 @@ class _InitTransaction {
 List<String> scaffoldProject(String projectRoot) {
   final pubspec = File('$projectRoot/pubspec.yaml');
   if (!pubspec.existsSync()) {
-    throw StateError(
-        'pubspec.yamlが見つかりません。Flutterプロジェクトのルートで実行してください');
+    throw StateError('pubspec.yamlが見つかりません。Flutterプロジェクトのルートで実行してください');
   }
-  final packageName = RegExp(r'^name:\s*(\S+)', multiLine: true)
-          .firstMatch(pubspec.readAsStringSync())
-          ?.group(1) ??
+  final packageName =
+      RegExp(
+        r'^name:\s*(\S+)',
+        multiLine: true,
+      ).firstMatch(pubspec.readAsStringSync())?.group(1) ??
       'app';
 
   final created = <String>[];
@@ -180,11 +177,13 @@ List<String> scaffoldProject(String projectRoot) {
 
 /// 列挙結果からtest_bundle.g.dartを書き出す（毎回上書き。生成物のため）。
 void writeBundle(EnumerationResult enumeration) {
-  File('${enumeration.testDir}/test_bundle.g.dart')
-      .writeAsStringSync(generateBundle(enumeration));
+  File(
+    '${enumeration.testDir}/test_bundle.g.dart',
+  ).writeAsStringSync(generateBundle(enumeration));
 }
 
-String _mainTestTemplate(String packageName) => '''
+String _mainTestTemplate(String packageName) =>
+    '''
 import 'package:endevir/endevir.dart';
 import 'package:$packageName/main.dart';
 
@@ -203,10 +202,14 @@ import 'package:endevir/endevir.dart';
 import 'package:flutter/material.dart';
 
 void main() {
-  endevirTest('アプリが起動する', (e) async {
-    // 最初の画面に表示されるテキスト等に置き換えてください
-    await e.expectVisible(MaterialApp);
-  });
+  endevirTest(
+    'アプリが起動する',
+    (e) async {
+      // 最初の画面に表示されるテキスト等に置き換えてください
+      await e.expectVisible(MaterialApp);
+    },
+    mode: EndevirTestMode.userPath,
+  );
 }
 ''';
 
@@ -228,11 +231,12 @@ Future<InitResult> initializeProject({
   var created = const <String>[];
   try {
     created = scaffoldProject(projectRoot);
-    final result = await processRunner(
-      flutter,
-      [...flutterPrefix, 'pub', 'add', ...dependencySpecs],
-      workingDirectory: projectRoot,
-    );
+    final result = await processRunner(flutter, [
+      ...flutterPrefix,
+      'pub',
+      'add',
+      ...dependencySpecs,
+    ], workingDirectory: projectRoot);
     if (result.exitCode != 0) {
       transaction.rollback();
       return InitResult(
@@ -261,20 +265,20 @@ Future<ProcessResult> _runInitProcess(
   String executable,
   List<String> arguments, {
   String? workingDirectory,
-}) =>
-    Process.run(executable, arguments, workingDirectory: workingDirectory);
+}) => Process.run(executable, arguments, workingDirectory: workingDirectory);
 
 Future<int> runInitCommand(List<String> args) async {
   final parser = ArgParser()
-    ..addOption('endevir-path',
-        help: 'ローカルEndevirモノレポへのパス')
+    ..addOption('endevir-path', help: 'ローカルEndevirモノレポへのパス')
     ..addOption('endevir-git', help: 'EndevirモノレポのGit URL')
     ..addOption('endevir-ref', help: '--endevir-gitで使用するbranch/tag/commit')
     ..addFlag('help', abbr: 'h', negatable: false);
   final options = parser.parse(args);
   if (options['help'] as bool) {
-    print('usage: endevir init [--endevir-path <path> | '
-        '--endevir-git <url> [--endevir-ref <ref>]]');
+    print(
+      'usage: endevir init [--endevir-path <path> | '
+      '--endevir-git <url> [--endevir-ref <ref>]]',
+    );
     print(parser.usage);
     return 0;
   }

@@ -111,6 +111,13 @@ void main() {
       expect(events[2].attempt, 2);
     });
 
+    test('testStartはテストの操作境界を記録する', () {
+      writer.runStart(runId: 'r', platform: 'android');
+      writer.testStart('ユーザーパス', mode: TraceTestMode.USER_PATH);
+
+      expect(parsed()[1].testMode, TraceTestMode.USER_PATH);
+    });
+
     test('attempt省略時は1（初回試行）になる', () {
       writer.runStart(runId: 'r', platform: 'android');
       final testId = writer.testStart('t');
@@ -129,8 +136,9 @@ void main() {
       writer.stepEnd(step2, TraceStatus.PASSED);
 
       expect(step1, isNot(step2));
-      final stepStarts =
-          parsed().where((e) => e.type == TraceEventType.STEP_START).toList();
+      final stepStarts = parsed()
+          .where((e) => e.type == TraceEventType.STEP_START)
+          .toList();
       expect(stepStarts.map((e) => e.stepId), [step1, step2]);
     });
   });

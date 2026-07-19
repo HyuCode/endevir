@@ -14,10 +14,14 @@ import 'package:example_app/main.dart';
 
 Future<void> main() => endevirRunnerMain(
       registerTests: () {
-        endevirTest('カウントアップできる', (e) async {
-          await e.step('画面遷移', () => e.$(#nav_button).tap());
-          await e.expectVisible('カウント: 1');
-        });
+        endevirTest(
+          'カウントアップできる',
+          (e) async {
+            await e.step('画面遷移', () => e.$(#nav_button).tap());
+            await e.expectVisible('カウント: 1');
+          },
+          mode: EndevirTestMode.userPath,
+        );
       },
       appBuilder: () => const ExampleApp(),
     );
@@ -35,6 +39,21 @@ $ dart run endevir_cli:endevir_cli test -p ios -d <simulator-udid>
 - タップはイベント駆動の自動待機+位置安定チェック（exists≠actionable対策）つき
 - 実行は全ステップがtrace（JSONL）として記録され、自己完結HTMLレポートが生成される
 - iOSシミュレータ / Androidエミュレータ・実機に同一コマンドで対応
+
+## テストが保証する境界
+
+Endevirの現行ランナーは、テストコードとアプリを同じFlutterプロセスで動かす。
+テスト結果を過大評価しないため、各テストは操作境界を分類する。
+
+| モード      | 契約                                                                                            |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `inProcess` | State、service、callbackなどアプリ内部への直接アクセスを許容する。既定値                        |
+| `userPath`  | 公開UIの検索・入力・表示検証だけでシナリオを進める。`mode: EndevirTestMode.userPath` を明示する |
+
+`userPath`も実行エンジンはin-processであり、コンパイル済みアプリを外部から操作する
+black-boxテストではない。OS権限ダイアログ、共有シート、通知などのシステムUI操作は
+α時点では非対応。`endevir native android` はJUnitへのケース写像であり、この境界を
+black-boxへ変更しない。詳細は[ADR-008](docs/01-adr/08-test-mode-boundary.md)を参照。
 
 ## モノレポ構成
 

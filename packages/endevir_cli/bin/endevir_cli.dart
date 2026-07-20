@@ -14,6 +14,7 @@ Future<void> main(List<String> args) async {
     print('commands:');
     print('  init     プロジェクトへEndevirを導入する');
     print('  doctor   環境・プロジェクトを診断する');
+    print('  build    再利用可能なテストアプリをビルドする');
     print('  test     テストを実行してtraceを回収する');
     print('  develop  修正のたびにホットリスタートで再実行する');
     print('  native   ネイティブテスト写像（instrumentation）を生成・実行する');
@@ -24,6 +25,7 @@ Future<void> main(List<String> args) async {
   final exitCode = switch (command) {
     'init' => await runInitCommand(rest),
     'doctor' => await runDoctorCommand(rest),
+    'build' => await runBuildCommand(rest),
     'test' => await runTestCommand(rest),
     'develop' => await runDevelopCommand(rest),
     'native' => await runNativeCommand(rest),

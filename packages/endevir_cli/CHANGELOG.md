@@ -4,3 +4,4 @@
 - Add static test enumeration and bundled execution.
 - Add Android instrumentation generation, local execution, and APK builds.
 - Generate JSONL traces and self-contained HTML evidence reports.
+- Add `build` and validated `test --reuse-build` workflows.

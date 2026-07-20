@@ -10,6 +10,7 @@ import 'package:args/args.dart';
 import 'package:endevir_reporter/endevir_reporter.dart';
 import 'package:yaml/yaml.dart';
 
+import 'build_cache.dart';
 import 'device_preflight.dart';
 import 'enumerate.dart';
 import 'flutter_cli.dart';
@@ -17,6 +18,47 @@ import 'init_command.dart' show writeBundle;
 import 'stage_retry.dart';
 
 const _agentPort = 8808;
+
+/// Builds a reusable Endevir test application without installing or launching it.
+Future<int> runBuildCommand(List<String> args) async {
+  final parser = ArgParser()
+    ..addOption('platform',
+        abbr: 'p', allowed: ['ios', 'android'], help: 'ビルドプラットフォーム')
+    ..addOption('target',
+        abbr: 't',
+        defaultsTo: 'endevir_test/main_test.dart',
+        help: 'テストエントリポイント')
+    ..addOption('out', defaultsTo: '.endevir', help: 'build manifest出力先')
+    ..addFlag('help', abbr: 'h', negatable: false);
+  final options = parser.parse(args);
+  if (options['help'] as bool) {
+    print('usage: endevir build -p <ios|android> [-t target]');
+    print(parser.usage);
+    return 0;
+  }
+  final platform = options['platform'] as String?;
+  if (platform == null) {
+    stderr.writeln('error: --platform は必須です');
+    return 64;
+  }
+
+  final target = options['target'] as String;
+  final outDir = Directory(options['out'] as String);
+  _prepareTestBundle(outDir, regenerate: true);
+  final launcher = _launcherFor(platform, '');
+  try {
+    await _buildAndRecord(
+      launcher: launcher,
+      platform: platform,
+      target: target,
+      outDir: outDir,
+    );
+    return 0;
+  } on ProcessException catch (error) {
+    stderr.writeln('[endevir] build failed: $error');
+    return 1;
+  }
+}
 
 /// プロジェクトルートの endevir.yaml から実行設定を読む（CORE-103）。
 EndevirRunConfig loadRunConfig({String path = 'endevir.yaml'}) {
@@ -38,6 +80,8 @@ Future<int> runTestCommand(List<String> args) async {
         help: 'テストエントリポイント')
     ..addOption('out', defaultsTo: '.endevir', help: 'trace出力ディレクトリ')
     ..addOption('only', help: '実行するテスト名（完全一致）')
+    ..addFlag('reuse-build',
+        negatable: false, help: '`endevir build`で生成した成果物を再利用')
     ..addFlag('help', abbr: 'h', negatable: false);
 
   final options = parser.parse(args);
@@ -55,66 +99,80 @@ Future<int> runTestCommand(List<String> args) async {
 
   final target = options['target'] as String;
   final outDir = Directory(options['out'] as String);
+  final reuseBuild = options['reuse-build'] as bool;
 
   // ビルド時テスト列挙+バンドル再生成（CORE-104/110、ADR-005）
-  if (Directory('endevir_test').existsSync()) {
-    final enumeration = enumerateTests('endevir_test');
-    for (final warning in enumeration.warnings) {
-      print('[endevir] WARNING: $warning');
+  _prepareTestBundle(outDir, regenerate: !reuseBuild);
+
+  final launcher = _launcherFor(platform, device);
+  if (reuseBuild) {
+    final validation = validateReusableBuild(
+      projectRoot: Directory.current.path,
+      outDir: outDir.path,
+      platform: platform,
+      target: target,
+    );
+    if (!validation.isValid) {
+      stderr.writeln(
+          '[endevir] reusable build rejected: ${validation.message}');
+      stderr.writeln(
+          '[endevir] run `endevir build -p $platform -t $target` first');
+      return 66;
     }
-    writeBundle(enumeration);
-    outDir.createSync(recursive: true);
-    File('${outDir.path}/test_manifest.json').writeAsStringSync(jsonEncode([
-      for (final entry in enumeration.entries)
-        {'fullName': entry.fullName, 'file': entry.file},
-    ]));
-    print('[endevir] ${enumeration.entries.length} tests '
-        'in ${enumeration.files.length} files (bundle regenerated)');
+    print('[endevir] reuse build: ${launcher.artifactPath}');
   }
 
-  final launcher = platform == 'ios'
-      ? _IosSimulatorLauncher(device)
-      : _AndroidLauncher(device);
-  if (!await _runPreflight(platform, device, phase: 'before build')) {
+  if (!await _runPreflight(platform, device,
+      phase: reuseBuild ? 'before install' : 'before build')) {
     return 1;
   }
 
   try {
-    print('[endevir] build ($platform, target: $target)');
-    await launcher.build(target);
+    if (!reuseBuild) {
+      await _buildAndRecord(
+        launcher: launcher,
+        platform: platform,
+        target: target,
+        outDir: outDir,
+      );
 
-    if (!await _runPreflight(platform, device, phase: 'after build')) {
-      return 1;
+      if (!await _runPreflight(platform, device, phase: 'after build')) {
+        return 1;
+      }
     }
 
     print('[endevir] install');
-    await runCliStage<void>(
-      stage: CliStage.install,
-      operation: launcher.install,
-      retryIf: (error) => error is ProcessException,
-      onRetry: _printStageRetry,
-    );
+    await _measureStage<void>('install', () => runCliStage<void>(
+          stage: CliStage.install,
+          operation: launcher.install,
+          retryIf: (error) => error is ProcessException,
+          onRetry: _printStageRetry,
+        ));
 
     print('[endevir] launch');
-    await runCliStage<void>(
-      stage: CliStage.launch,
-      operation: launcher.launch,
-      retryIf: (error) => error is ProcessException,
-      onRetry: _printStageRetry,
-    );
+    await _measureStage<void>('launch', () => runCliStage<void>(
+          stage: CliStage.launch,
+          operation: launcher.launch,
+          retryIf: (error) => error is ProcessException,
+          onRetry: _printStageRetry,
+        ));
 
     print('[endevir] connect to agent');
-    final socket = await connectToAgent(
-      host: launcher.agentHost,
-      onRetry: _printStageRetry,
-    );
+    final socket = await _measureStage<WebSocket>(
+        'agent connect',
+        () => connectToAgent(
+              host: launcher.agentHost,
+              onRetry: _printStageRetry,
+            ));
     try {
-      return await runAndCollect(
-        socket,
-        outDir: outDir,
-        only: options['only'] as String?,
-        config: loadRunConfig(),
-      );
+      return await _measureStage<int>(
+          'test run',
+          () => runAndCollect(
+                socket,
+                outDir: outDir,
+                only: options['only'] as String?,
+                config: loadRunConfig(),
+              ));
     } finally {
       await socket.close();
     }
@@ -124,6 +182,56 @@ Future<int> runTestCommand(List<String> args) async {
   } finally {
     await launcher.terminate();
   }
+}
+
+Future<T> _measureStage<T>(String name, Future<T> Function() operation) async {
+  final stopwatch = Stopwatch()..start();
+  try {
+    return await operation();
+  } finally {
+    print('[endevir] timing: $name ${stopwatch.elapsedMilliseconds}ms');
+  }
+}
+
+_Launcher _launcherFor(String platform, String device) => platform == 'ios'
+    ? _IosSimulatorLauncher(device)
+    : _AndroidLauncher(device);
+
+void _prepareTestBundle(Directory outDir, {required bool regenerate}) {
+  if (!Directory('endevir_test').existsSync()) return;
+  final enumeration = enumerateTests('endevir_test');
+  for (final warning in enumeration.warnings) {
+    print('[endevir] WARNING: $warning');
+  }
+  if (regenerate) writeBundle(enumeration);
+  outDir.createSync(recursive: true);
+  File('${outDir.path}/test_manifest.json').writeAsStringSync(jsonEncode([
+    for (final entry in enumeration.entries)
+      {'fullName': entry.fullName, 'file': entry.file},
+  ]));
+  print('[endevir] ${enumeration.entries.length} tests '
+      'in ${enumeration.files.length} files '
+      '(${regenerate ? 'bundle regenerated' : 'reusing bundled tests'})');
+}
+
+Future<void> _buildAndRecord({
+  required _Launcher launcher,
+  required String platform,
+  required String target,
+  required Directory outDir,
+}) async {
+  final stopwatch = Stopwatch()..start();
+  print('[endevir] build ($platform, target: $target)');
+  await launcher.build(target);
+  writeBuildManifest(
+    projectRoot: Directory.current.path,
+    outDir: outDir.path,
+    platform: platform,
+    target: target,
+    artifactPath: launcher.artifactPath,
+  );
+  print('[endevir] build ready: ${launcher.artifactPath} '
+      '(${stopwatch.elapsedMilliseconds}ms)');
 }
 
 void _printStageRetry(
@@ -279,6 +387,7 @@ Future<ProcessResult> _run(String executable, List<String> args,
 }
 
 abstract class _Launcher {
+  String get artifactPath;
   Future<void> build(String target);
   Future<void> install();
   Future<void> launch();
@@ -295,6 +404,9 @@ class _IosSimulatorLauncher extends _Launcher {
   static const _appPath = 'build/ios/iphonesimulator/Runner.app';
   String? _bundleId;
   bool _launchedByCli = false;
+
+  @override
+  String get artifactPath => _appPath;
 
   @override
   Future<void> build(String target) =>
@@ -336,6 +448,9 @@ class _AndroidLauncher extends _Launcher {
   String? _packageName;
   bool _launchedByCli = false;
   bool _forwardedByCli = false;
+
+  @override
+  String get artifactPath => _apkPath;
 
   @override
   Future<void> build(String target) =>

@@ -112,6 +112,29 @@ void main() {
       expect(elements, hasLength(1));
     });
 
+    testWidgets('semanticsIdentifierは外部UIと共有できる安定IDで特定する', (tester) async {
+      await tester.pumpWidget(
+        app(
+          Column(
+            children: [
+              Semantics(
+                container: true,
+                identifier: 'counter.increment',
+                child: const Icon(Icons.add),
+              ),
+              const Icon(Icons.remove),
+            ],
+          ),
+        ),
+      );
+
+      final finder = EndevirFinder.semanticsIdentifier('counter.increment');
+      final elements = finder.resolve(tester.binding.rootElement!);
+
+      expect(elements, hasLength(1));
+      expect(finder.describe(), contains('counter.increment'));
+    });
+
     testWidgets('チェーン（スコープ絞り込み）は親の配下だけを検索する', (tester) async {
       await tester.pumpWidget(
         app(

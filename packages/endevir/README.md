@@ -72,6 +72,47 @@ dart run endevir_cli:endevir_cli test -p android -d <adb-serial>
 Each run writes `.endevir/trace.jsonl` and a self-contained
 `.endevir/report.html` evidence report.
 
+## Stable selectors
+
+Use `ValueKey<String>` for Endevir-only widget-tree selectors. Use
+`Semantics.identifier` when the same contract must also be visible to external
+accessibility-based runners such as Maestro:
+
+```dart
+Semantics(
+  container: true,
+  identifier: 'counter.increment',
+  child: IconButton(
+    key: const ValueKey('increment'),
+    onPressed: increment,
+    icon: const Icon(Icons.add),
+  ),
+)
+```
+
+Both contracts can be selected explicitly:
+
+```dart
+await e.$(#increment).tap();
+await e.$(
+  EndevirFinder.semanticsIdentifier('counter.increment'),
+).tap();
+```
+
+Audit the visible widget tree to catch ambiguous or unstable selectors:
+
+```dart
+final report = e.auditSelectors();
+print(report.format());
+
+// Duplicate keys and identifiers always fail. In strict mode, missing stable
+// selectors and identifiers without `container: true` fail as well.
+e.expectSelectorsClean(warningsAsErrors: true);
+```
+
+The audit ignores hidden `Offstage` and `Visibility` subtrees so routes can
+reuse local selector names without creating false duplicate errors.
+
 ## Status and support
 
 The supported toolchain is Flutter 3.41 or newer with Dart 3.11 or newer.

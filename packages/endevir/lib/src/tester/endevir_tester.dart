@@ -14,6 +14,7 @@ import 'package:flutter/material.dart'
         TextField;
 import 'package:flutter/widgets.dart';
 
+import '../audit/selector_audit.dart';
 import '../evidence/evidence_recorder.dart';
 import '../finder/finder.dart';
 import '../interaction/pointer_synthesizer.dart';
@@ -134,6 +135,21 @@ class EndevirTester {
   // ignore: non_constant_identifier_names
   EndevirElement $(Object target) =>
       EndevirElement(EndevirFinder.from(target), this);
+
+  /// 現在画面のValueKeyとSemantics identifier契約を監査する。
+  SelectorAuditReport auditSelectors() =>
+      const SelectorAuditor().audit(_rootResolver());
+
+  /// 安定セレクタ監査を品質ゲートとして実行する。
+  ///
+  /// 重複は常に失敗。[warningsAsErrors]を有効にすると、識別子がない
+  /// 操作要素やマージ可能なSemantics identifierも失敗にする。
+  void expectSelectorsClean({bool warningsAsErrors = false}) {
+    final report = auditSelectors();
+    if (!report.passes(warningsAsErrors: warningsAsErrors)) {
+      throw SelectorAuditException(report, warningsAsErrors: warningsAsErrors);
+    }
+  }
 
   /// 対象が表示されるまで待つ（アサーション=待機、CORE-005）。
   Future<WaitResult> expectVisible(Object target, {Duration? timeout}) {

@@ -1,3 +1,4 @@
+import 'package:endevir/src/audit/selector_audit.dart';
 import 'package:endevir/src/evidence/evidence_recorder.dart';
 import 'package:endevir/src/finder/finder.dart';
 import 'package:endevir/src/tester/endevir_tester.dart';
@@ -30,6 +31,45 @@ void main() {
   );
 
   Widget counterApp() => const MaterialApp(home: _CounterScreen());
+
+  testWidgets('auditSelectorsは現在画面の安定セレクタ契約を返す', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: IconButton(
+            key: const ValueKey('increment'),
+            onPressed: () {},
+            icon: const Icon(Icons.add),
+          ),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    expect(e.auditSelectors().issues, isEmpty);
+    expect(() => e.expectSelectorsClean(warningsAsErrors: true), returnsNormally);
+  });
+
+  testWidgets('expectSelectorsCleanはstrict時に識別子欠落を失敗にする', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: IconButton(onPressed: () {}, icon: const Icon(Icons.add)),
+        ),
+      ),
+    );
+    final e = makeTester(tester);
+
+    expect(e.auditSelectors().warningCount, greaterThan(0));
+    expect(
+      () => e.expectSelectorsClean(warningsAsErrors: true),
+      throwsA(isA<SelectorAuditException>()),
+    );
+  });
 
   testWidgets('expectVisibleは対象が既に表示されていれば即完了する', (tester) async {
     await tester.pumpWidget(counterApp());
